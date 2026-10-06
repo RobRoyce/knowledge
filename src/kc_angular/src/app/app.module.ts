@@ -18,8 +18,9 @@ import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import {
   BackendAuthInterceptor,
   BackendService,
-  loadBackend,
+  initializeBackend,
 } from '@services/ipc-services/backend.service';
+import { StorageService } from '@services/ipc-services/storage.service';
 import { A11yModule } from '@angular/cdk/a11y';
 import { AccordionModule } from 'primeng/accordion';
 import { AppComponent } from '@app/app.component';
@@ -331,8 +332,8 @@ import { CarouselModule } from 'primeng/carousel';
   providers: [
     {
       provide: APP_INITIALIZER,
-      useFactory: loadBackend,
-      deps: [BackendService],
+      useFactory: initializeBackend,
+      deps: [BackendService, StorageService],
       multi: true,
     },
     {

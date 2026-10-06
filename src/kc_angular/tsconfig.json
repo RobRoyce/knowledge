@@ -43,6 +43,9 @@
       "@shared/*": [
         "../kc_shared/*"
       ],
+      "@contracts/*": [
+        "../kc_contracts/*"
+      ],
       "@services/*": [
         "src/app/services/*"
       ]

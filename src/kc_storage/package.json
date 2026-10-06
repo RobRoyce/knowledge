@@ -1,0 +1,21 @@
+{
+  "name": "kc_storage",
+  "version": "0.1.0",
+  "description": "Standalone storage service for Knowledge: projects, sources, and managed files in SQLite.",
+  "author": "Rob Royce <robertris2@gmail.com> (https://robroyce.dev)",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts serve",
+    "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

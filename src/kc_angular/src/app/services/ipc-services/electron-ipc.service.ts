@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import type { AssetRecord } from '@contracts/storage';
 import { Injectable, NgZone } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {
@@ -345,6 +346,19 @@ export class ElectronIpcService {
       );
       this.send(this.channels.openLocalFile, path);
     });
+  }
+
+  /**
+   * Copy a local file into the storage service. Desktop only: the renderer
+   * cannot read local paths. The original file is not changed.
+   */
+  importFile(path: string, mediaType?: string): Promise<AssetRecord> {
+    return window.api.invoke('A2E:Storage:ImportFile', { path, mediaType });
+  }
+
+  /** Open a managed file in its default application. Desktop only. */
+  openAsset(assetId: string): Promise<boolean> {
+    return window.api.invoke('A2E:Storage:OpenAsset', assetId);
   }
 
   generateUuid(quantity: number): Promise<UUID[]> {

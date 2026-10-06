@@ -1,0 +1,6 @@
+{
+  "name": "kc_contracts",
+  "private": true,
+  "description": "Storage API contracts shared by the storage service and the clients. No application imports.",
+  "type": "module"
+}

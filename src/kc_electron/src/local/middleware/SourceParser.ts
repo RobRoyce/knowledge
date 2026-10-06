@@ -20,6 +20,7 @@ import { getDocument } from "pdfjs-dist";
 import { htmlToText, HtmlToTextOptions } from "html-to-text";
 import fs from "fs";
 import TextUtils from "../utils/text.utils";
+import { materializeAsset } from "../../app/storage.client";
 import { codeMarkdownMap } from "../../../../kc_shared/constants/supported.file.types";
 
 export class SourceParser {
@@ -44,7 +45,10 @@ export class SourceParser {
     const accessLink = req.body.accessLink;
 
     if (ingestType === "file") {
-      req.body.text = await SourceParser.fromFile(accessLink);
+      // Managed files come from the storage service, not the original path
+      const assetId = req.body.source?.assetId;
+      const filePath = assetId ? await materializeAsset(assetId) : accessLink;
+      req.body.text = await SourceParser.fromFile(filePath);
     } else {
       req.body.text = await SourceParser.fromWeb(new URL(accessLink));
     }

@@ -59,6 +59,16 @@ export async function importFilesToProject(page, files) {
   await page.locator("button", { hasText: "Import" }).first().click();
 }
 
+/** Select a project in the project tree. */
+export async function selectProject(page, name) {
+  await page
+    .locator("p-tree, .p-tree")
+    .getByText(name, { exact: true })
+    .first()
+    .click();
+  await page.locator("i.pi-table").first().waitFor({ timeout: TIMEOUT });
+}
+
 export async function openTable(page) {
   await page.locator("i.pi-table").first().click();
   await page
@@ -80,9 +90,24 @@ export async function openSource(page, title) {
     .waitFor({ timeout: TIMEOUT });
 }
 
+/**
+ * Close the open source dialog. An embedded PDF viewer keeps keyboard
+ * focus, so take focus away from it before pressing Escape. Use the close
+ * icon if Escape does not work.
+ */
 export async function closeDialog(page) {
+  const dialog = page.locator("p-dynamicdialog");
+  await page.evaluate(() => {
+    document.activeElement?.blur?.();
+    document.body.focus();
+  });
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(500);
+  try {
+    await dialog.first().waitFor({ state: "detached", timeout: 3000 });
+  } catch {
+    await dialog.locator(".pi-times").first().click();
+    await dialog.first().waitFor({ state: "detached", timeout: 5000 });
+  }
 }
 
 export async function addAnnotation(page, key, value) {

@@ -19,6 +19,8 @@ import {
   ThumbnailRequest,
 } from "../../../../kc_shared/models/electron.ipc.model";
 
+import { materializeAsset } from "../storage.client";
+
 const fse = require("fs-extra");
 const settingsService = require("../services/settings.service");
 
@@ -162,11 +164,14 @@ getFileThumbnail = ipcMain.on(
     for (const request of requests) {
       const height = request.height ?? 1920;
       const width = request.width ?? 1080;
+      // Managed files come from the storage service. Others use the given path.
+      const file = request.assetId
+        ? materializeAsset(request.assetId)
+        : Promise.resolve(path.resolve(request.path));
       actions.push(
-        nativeImage.createThumbnailFromPath(path.resolve(request.path), {
-          width: width,
-          height: height,
-        })
+        file.then((p: string) =>
+          nativeImage.createThumbnailFromPath(p, { width, height })
+        )
       );
     }
 

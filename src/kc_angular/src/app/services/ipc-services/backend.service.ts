@@ -31,6 +31,7 @@ export interface BackendEndpoint {
 
 export interface BackendInfo {
   chat: BackendEndpoint;
+  storage: BackendEndpoint;
 }
 
 /**
@@ -43,20 +44,28 @@ export interface BackendInfo {
 export class BackendService {
   private info: BackendInfo = {
     chat: { error: 'Backend information not loaded.' },
+    storage: { error: 'Backend information not loaded.' },
   };
 
   get chat(): BackendEndpoint {
     return this.info.chat;
   }
 
+  get storage(): BackendEndpoint {
+    return this.info.storage;
+  }
+
   async load() {
     try {
       this.info = await window.api.invoke('A2E:Backend:Info');
     } catch (e) {
-      this.info = { chat: { error: `Backend information unavailable: ${e}` } };
+      const error = `Backend information unavailable: ${e}`;
+      this.info = { chat: { error }, storage: { error } };
     }
-    if (this.info.chat.error) {
-      console.error('[Backend]:', this.info.chat.error);
+    for (const [name, endpoint] of Object.entries(this.info)) {
+      if (endpoint.error) {
+        console.error(`[Backend]: ${name}: ${endpoint.error}`);
+      }
     }
   }
 
@@ -93,6 +102,22 @@ export class BackendAuthInterceptor implements HttpInterceptor {
   }
 }
 
-export function loadBackend(backend: BackendService) {
-  return () => backend.load();
+/**
+ * Runs before the app starts: get this instance's server addresses, then
+ * load projects and sources from the storage service.
+ */
+export function initializeBackend(
+  backend: BackendService,
+  storage: { load(): Promise<void> }
+) {
+  return async () => {
+    await backend.load();
+    try {
+      await storage.load();
+    } catch (e: any) {
+      const reason = e?.error?.error?.message ?? e?.message ?? String(e);
+      console.error('[Storage]: load failed', e);
+      alert(`Knowledge could not load your library.\n\n${reason}`);
+    }
+  };
 }

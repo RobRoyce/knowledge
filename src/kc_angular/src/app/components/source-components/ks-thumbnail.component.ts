@@ -143,6 +143,7 @@ export class KsThumbnailComponent implements OnDestroy, OnChanges {
       this.ipcService.getFileThumbnail([
         {
           path: link,
+          assetId: this.ks.assetId,
           id: this.ks.id.value,
         },
       ]);

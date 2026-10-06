@@ -121,24 +121,51 @@ export async function startFixtureSite() {
   };
 }
 
-/** Read projects and their sources as the renderer sees them. */
+/** Backend addresses and tokens of the instance that owns this page. */
+export function backendInfo(page) {
+  return page.evaluate(() => window.api.invoke("A2E:Backend:Info"));
+}
+
+/** Read projects and sources from this instance's storage service. */
 export async function readLibrary(page) {
-  return page.evaluate(() => {
-    const ids = JSON.parse(localStorage.getItem("kc-projects") ?? "[]");
-    return ids.map((id) => {
-      const p = JSON.parse(localStorage.getItem(id));
-      return {
-        id,
-        name: p.name,
-        sources: p.knowledgeSource.map((k) => ({
-          title: k.title,
-          type: k.ingestType,
-          topics: k.topics ?? [],
-          annotations: (k.meta ?? [])
+  return page.evaluate(async () => {
+    const { storage } = await window.api.invoke("A2E:Backend:Info");
+    const get = (route) =>
+      fetch(`${storage.url}/v1/${route}`, {
+        headers: { Authorization: `Bearer ${storage.token}` },
+      }).then((r) => r.json());
+    const { projects } = await get("projects");
+    const { sources } = await get("sources");
+    return projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      sources: sources
+        .filter((s) => s.projectId === p.id)
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          type: s.ingestType,
+          assetId: s.assetId,
+          topics: s.data.topics ?? [],
+          annotations: (s.data.meta ?? [])
             .filter((m) => m.key === "annotation")
             .map((m) => m.value),
         })),
-      };
-    });
+    }));
   });
+}
+
+/** Bytes of a managed file, read through this instance's storage service. */
+export async function readAsset(page, assetId) {
+  const base64 = await page.evaluate(async (id) => {
+    const { storage } = await window.api.invoke("A2E:Backend:Info");
+    const res = await fetch(`${storage.url}/v1/assets/${id}/content`, {
+      headers: { Authorization: `Bearer ${storage.token}` },
+    });
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let text = "";
+    for (const b of bytes) text += String.fromCharCode(b);
+    return btoa(text);
+  }, assetId);
+  return Buffer.from(base64, "base64");
 }

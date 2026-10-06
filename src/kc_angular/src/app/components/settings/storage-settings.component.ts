@@ -29,14 +29,43 @@ import { SettingsService } from '@services/ipc-services/settings.service';
           <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Backup</div>
+                <div class="text-2xl">Library Backup</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">
               <div class="w-full h-full flex flex-column">
                 <div class="mb-3 text-500">
-                  A backup holds projects, sources, annotations, chat history
-                  and the inbox. It does not hold settings or imported files.
+                  Projects, sources, topics, metadata, and copies of imported
+                  files. Restore it with the storage service command line (see
+                  DEVELOPMENT.md). It does not hold chat history, preferences,
+                  or settings.
+                </div>
+                <app-setting-template class="w-full" label="Export Library">
+                  <div class="settings-input">
+                    <button
+                      pButton
+                      label="Export Library"
+                      [loading]="exportingLibrary"
+                      (click)="onExportLibrary()"
+                    ></button>
+                  </div>
+                </app-setting-template>
+              </div>
+            </ng-template>
+          </p-panel>
+        </div>
+        <div class="col-12">
+          <p-panel>
+            <ng-template pTemplate="header">
+              <div class="flex-row-center-between w-full">
+                <div class="text-2xl">Chat and Preferences Backup</div>
+              </div>
+            </ng-template>
+            <ng-template pTemplate="content">
+              <div class="w-full h-full flex flex-column">
+                <div class="mb-3 text-500">
+                  Chat history, the inbox, and UI preferences from this window's
+                  local storage. It does not hold projects, sources, or files.
                 </div>
                 <app-setting-template class="w-full" label="Export Backup">
                   <div class="settings-input">
@@ -79,6 +108,8 @@ export class StorageSettingsComponent {
 
   exporting = false;
 
+  exportingLibrary = false;
+
   form: FormGroup;
 
   constructor(
@@ -106,6 +137,26 @@ export class StorageSettingsComponent {
     }
   }
 
+  async onExportLibrary() {
+    this.exportingLibrary = true;
+    try {
+      const size = await this.storage.exportLibrary();
+      this.notifications.success(
+        'Backup',
+        'Library Exported',
+        `${(size / 1024).toFixed(0)} KB`
+      );
+    } catch (e: any) {
+      this.notifications.error(
+        'Backup',
+        'Library Export Failed',
+        e?.error?.error?.message ?? e?.message ?? `${e}`
+      );
+    } finally {
+      this.exportingLibrary = false;
+    }
+  }
+
   onImport($event: any) {
     const input: HTMLInputElement = $event.target;
     const file = input.files?.[0];
@@ -120,7 +171,7 @@ export class StorageSettingsComponent {
         this.notifications.success(
           'Backup',
           'Backup Restored',
-          `${result.projectsAdded} projects added, ${result.projectsReplaced} replaced. Reloading...`
+          `${result.keysWritten} entries restored. Reloading...`
         );
 
         // Reload so every service reads the restored storage

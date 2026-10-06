@@ -60,6 +60,8 @@ export interface DialogRequest {
 
 export interface ThumbnailRequest {
   path: string;
+  /** Managed file in the storage service. Used instead of path when set. */
+  assetId?: string;
   width?: number;
   height?: number;
   id?: string;

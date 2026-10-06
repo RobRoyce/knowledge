@@ -33,6 +33,7 @@ export interface BackendEndpoint {
 
 export interface BackendInfo {
   chat: BackendEndpoint;
+  storage: BackendEndpoint;
 }
 
 export function newToken() {
@@ -47,6 +48,6 @@ export function registerBackendInfo(endpoints: {
   [K in keyof BackendInfo]: Promise<BackendEndpoint>;
 }) {
   ipcMain.handle("A2E:Backend:Info", async (): Promise<BackendInfo> => {
-    return { chat: await endpoints.chat };
+    return { chat: await endpoints.chat, storage: await endpoints.storage };
   });
 }
