@@ -24,6 +24,7 @@
     "electron": "^26.3.0",
     "electron-updater": "^6.1.4",
     "express-rate-limit": "^6.11.2",
+    "fs-extra": "^10.1.0",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "openai": "^4.25.0",

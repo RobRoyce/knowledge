@@ -62,7 +62,7 @@ export interface KsPreviewInput {
       <div class="ks-preview-footer w-full flex-row-center-center">
         <div *ngIf="!viewReady">
           <img
-            src="https://knowledge-app.s3.us-west-1.amazonaws.com/kc-icon-transparent.png"
+            src="assets/img/kc-icon-transparent.png"
             alt="Knowledge Logo"
             class="pulsate-fwd"
             style="filter: drop-shadow(0 0 1px var(--primary-color)); height: 8rem; position: absolute; left: calc(50vw - 4rem); top: calc(50vh - 4rem)"

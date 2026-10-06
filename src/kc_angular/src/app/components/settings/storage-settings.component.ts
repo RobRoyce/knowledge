@@ -18,6 +18,7 @@ import { Component } from '@angular/core';
 import { StorageService } from '@services/ipc-services/storage.service';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { NotificationsService } from '@services/user-services/notifications.service';
+import { SettingsService } from '@services/ipc-services/settings.service';
 
 @Component({
   selector: 'app-storage-settings',
@@ -28,12 +29,16 @@ import { NotificationsService } from '@services/user-services/notifications.serv
           <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Import/Export</div>
+                <div class="text-2xl">Backup</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">
               <div class="w-full h-full flex flex-column">
-                <app-setting-template class="w-full" label="Export All">
+                <div class="mb-3 text-500">
+                  A backup holds projects, sources, annotations, chat history
+                  and the inbox. It does not hold settings or imported files.
+                </div>
+                <app-setting-template class="w-full" label="Export Backup">
                   <div class="settings-input">
                     <button
                       pButton
@@ -44,17 +49,18 @@ import { NotificationsService } from '@services/user-services/notifications.serv
                   </div>
                 </app-setting-template>
 
-                <app-setting-template class="w-full" label="Import from File">
+                <app-setting-template class="w-full" label="Restore Backup">
                   <div class="settings-input">
                     <input
                       #importUpload
                       class="hidden"
                       (change)="onImport($event)"
                       type="file"
+                      accept=".json,application/json"
                     />
                     <button
                       pButton
-                      label="Import"
+                      label="Restore"
                       (click)="importUpload.click()"
                     ></button>
                   </div>
@@ -78,64 +84,53 @@ export class StorageSettingsComponent {
   constructor(
     private storage: StorageService,
     private formBuilder: FormBuilder,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private settings: SettingsService
   ) {
     this.form = formBuilder.group({});
   }
 
-  async onExport() {
+  onExport() {
     this.exporting = true;
-    await this.storage.export();
-    this.exporting = false;
+    try {
+      const keys = this.storage.export(this.settings.get().system?.appVersion);
+      this.notifications.success(
+        'Backup',
+        'Backup Exported',
+        `Saved ${keys} storage entries.`
+      );
+    } catch (e) {
+      this.notifications.error('Backup', 'Export Failed', `${e}`);
+    } finally {
+      this.exporting = false;
+    }
   }
 
   onImport($event: any) {
-    const files: any[] = $event.target.files;
-    if (!files) {
+    const input: HTMLInputElement = $event.target;
+    const file = input.files?.[0];
+    if (!file) {
       return;
     }
 
-    const file: File = files[0];
     file
       .text()
-      .then((importFile) => {
-        const imported = JSON.parse(importFile);
-        if (imported?.projects) {
-          const projects = imported.projects;
-          const projectList: string[] = [];
-          for (const project of projects) {
-            projectList.push(project.id.value);
-            const id = project.id.value;
-            const pStr = JSON.stringify(project);
-            if (pStr) {
-              localStorage.setItem(id, pStr);
-            }
-          }
-
-          const projectsStr = localStorage.getItem('kc-projects');
-          if (projectsStr) {
-            const ids: string[] = JSON.parse(projectsStr);
-            if (ids) {
-              const nextIds = [];
-              for (const id of ids) {
-                nextIds.push(id);
-              }
-              for (const id of projectList) {
-                nextIds.push(id);
-              }
-              ids.concat(projectList);
-              const idStr = JSON.stringify(nextIds);
-              localStorage.setItem('kc-projects', idStr);
-            }
-          }
-        }
-      })
-      .catch(() => {
-        this.notifications.error(
-          'Storage Settings',
-          'File Error',
-          'Unable to read file.'
+      .then((text) => {
+        const result = this.storage.restore(text);
+        this.notifications.success(
+          'Backup',
+          'Backup Restored',
+          `${result.projectsAdded} projects added, ${result.projectsReplaced} replaced. Reloading...`
         );
+
+        // Reload so every service reads the restored storage
+        setTimeout(() => window.location.reload(), 1500);
+      })
+      .catch((e: Error) => {
+        this.notifications.error('Backup', 'Restore Failed', e.message);
+      })
+      .finally(() => {
+        input.value = '';
       });
   }
 }

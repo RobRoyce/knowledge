@@ -18,6 +18,7 @@ import { KcProject } from '@app/models/project.model';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { AutoscanService } from '@services/ingest-services/autoscan.service';
 import { NotificationsService } from '@services/user-services/notifications.service';
+import { createBackup, restoreBackup, RestoreResult } from './backup';
 
 @Injectable({
   providedIn: 'root',
@@ -279,75 +280,44 @@ export class StorageService {
     this.db.setItem(this.KC_ALL_PROJECT_IDS, projectListStr);
   }
 
-  createFile(encoding: string) {
-    const type = 'text/json';
-    const charset = 'utf-8';
-
-    const blob = new Blob([encoding], {
-      type: `${type};charset=${charset};`,
+  /**
+   * Download a backup of all renderer storage as a JSON file.
+   */
+  export(appVersion?: string) {
+    const backup = createBackup(this.db, appVersion);
+    const date = backup.exportedAt.slice(0, 10);
+    const blob = new Blob([JSON.stringify(backup)], {
+      type: 'application/json;charset=utf-8;',
     });
 
     const link = document.createElement('a');
     link.style.display = 'none';
+    link.href = URL.createObjectURL(blob);
+    link.download = `knowledge-backup-${date}.json`;
     document.body.appendChild(link);
-    if (link.download !== undefined) {
-      link.setAttribute('href', URL.createObjectURL(blob));
-      link.setAttribute('download', `knowledge_export.json`);
-      link.click();
-    } else {
-      encoding = `data:${type};charset=${charset}` + encoding;
-      window.open(encodeURI(encoding));
-    }
+    link.click();
     document.body.removeChild(link);
+
+    // Chromium reads the blob after click() returns
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+
+    return Object.keys(backup.data).length;
   }
 
-  async export() {
-    const sources: KnowledgeSource[] = [];
-    const icons: any[] = [];
-    const projects: KcProject[] = [];
-
-    for (let i = 0; i < this.db.length; i++) {
-      const key = this.db.key(i);
-      if (key?.startsWith('ks-')) {
-        const ksStr = this.db.getItem(key);
-        if (ksStr) {
-          const ks: KnowledgeSource = JSON.parse(ksStr);
-          if (ks) {
-            sources.push(ks);
-          }
-        }
-      } else if (key?.startsWith('icon-')) {
-        const iconStr = this.db.getItem(key);
-        if (iconStr) {
-          icons.push({
-            ksId: key.replace('icon-', ''),
-            icon: iconStr,
-          });
-        }
-      } else if (key?.length === 36) {
-        const projectStr = this.db.getItem(key);
-        if (projectStr) {
-          const kcProject: KcProject = JSON.parse(projectStr);
-          if (kcProject) {
-            projects.push(kcProject);
-          }
-        }
-      } else {
-        this.notifications.error(
-          'Storage Service',
-          'Invalid Storage Key',
-          key ?? ''
-        );
-      }
+  /**
+   * Restore a backup file. The caller must reload the app afterwards.
+   * Throws an Error with a user-facing message if the file is invalid.
+   */
+  restore(fileText: string): RestoreResult {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fileText);
+    } catch {
+      throw new Error('The file is not valid JSON.');
     }
-
-    const encoding = {
-      projects: projects,
-      sources: sources,
-      icons: icons,
-    };
-
-    this.createFile(JSON.stringify(encoding));
+    const result = restoreBackup(this.db, parsed);
+    this.projectList = null;
+    return result;
   }
 
   deleteKnowledgeSource(ks: KnowledgeSource) {

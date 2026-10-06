@@ -175,26 +175,28 @@ export class WebImportComponent {
   // HostListener for pasting text
   @HostListener('paste', ['$event'])
   onPaste(event: ClipboardEvent) {
-    const text = event.clipboardData?.getData('text');
+    this.addUrls(event.clipboardData?.getData('text') ?? '');
+  }
 
-    // Get all URLs in text
-    const regex = /https?:\/\/[^\s]+/g;
-    const matches = text?.match(regex);
+  onSubmit(value: string) {
+    this.addUrls(value);
+  }
 
-    // Add URLs to array
+  /**
+   * Create Sources from every URL in the text, then clear the input.
+   */
+  private addUrls(text: string) {
+    const matches = text.match(/https?:\/\/[^\s]+/g);
+
     if (matches) {
-      const urls: string[] = [];
-      matches.forEach((match) => {
-        // Remove commas from end of URLs
-        if (match.endsWith(',')) {
-          match = match.slice(0, -1);
-        }
-        urls.push(match);
-      });
+      // Remove trailing commas from pasted lists
+      const urls = matches.map((match) =>
+        match.endsWith(',') ? match.slice(0, -1) : match
+      );
       this.createSource(urls);
     }
 
-    // Clear form by resetting URL field, making sure the value is updated
+    // Reset after the input event so the field clears
     setTimeout(() => {
       this.linkForm.setValue({
         url: '',
@@ -202,8 +204,6 @@ export class WebImportComponent {
       this.linkForm.reset();
     });
   }
-
-  onSubmit(value: string) {}
 
   createSource(urls: string[]) {
     const requests: KnowledgeSourceFactoryRequest = {

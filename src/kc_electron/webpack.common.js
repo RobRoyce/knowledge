@@ -43,6 +43,8 @@ let webpack_config = {
     // NOTE: https://github.com/yan-foto/electron-reload/issues/71
     fsevents: "require('fsevents')",
     express: "require('express')",
+    // pdfjs-dist loads canvas only to render pages. Text extraction does not need it.
+    canvas: "commonjs canvas",
   },
   resolve: {
     extensions: [".ts", ".js", ".json"],

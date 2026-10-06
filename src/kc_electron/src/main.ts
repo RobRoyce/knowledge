@@ -14,6 +14,9 @@
  *  limitations under the License.
  */
 
+// Must load first. It sets the userData path before the session exists.
+import { profile, resourcesDir } from "./app/profile";
+
 import { autoUpdater, UpdateCheckResult } from "electron-updater";
 
 import {
@@ -37,6 +40,7 @@ import path from "path";
 import * as uuid from "uuid";
 import KnowledgeIpc from "./local/utils/ipc.utils";
 import ChatServer from "./local/chat.api";
+import { newToken, registerBackendInfo } from "./app/backend";
 
 const settingsService = require("./app/services/settings.service");
 
@@ -74,8 +78,16 @@ require("./app/services/auto.update.service");
 // Setup IPC
 require("./app/ipc");
 
-const chatServer = new ChatServer();
-chatServer.start(21003);
+// One instance per profile. Chromium keys this lock on the userData path.
+if (!app.requestSingleInstanceLock()) {
+  console.error(
+    "[Knowledge]: this profile is already open in another instance. Exiting."
+  );
+  app.exit(0);
+}
+
+const chatServer = new ChatServer(newToken());
+registerBackendInfo({ chat: chatServer.start() });
 
 // Setup knowledge source ingestion
 require("./app/services/index");
@@ -84,8 +96,6 @@ const browserIpc = require("./app/ipc").browserIpc;
 
 // Declare main window for later use
 let kcMainWindow: BrowserWindow;
-
-require("./local/chat.api");
 
 /**
  * Main Window Functions
@@ -98,6 +108,11 @@ function createMainWindow() {
   console.log("Theme: ", appEnv.display.theme);
 
   console.log("Knowledge storage path: ", app.getPath("userData"));
+  console.log(
+    "Knowledge data path: ",
+    settingsService.getSettings().system.appPath,
+    profile ? "(profile)" : ""
+  );
 
   app.setName("Knowledge");
 
@@ -110,7 +125,7 @@ function createMainWindow() {
     minWidth: 1000,
     minHeight: 850,
     frame: false,
-    icon: path.resolve(app.getAppPath(), "..", "icon.png"),
+    icon: path.join(resourcesDir(), "icon.png"),
     show: false,
     webPreferences: {
       nodeIntegration: false, // is default value after Electron v5
@@ -179,6 +194,13 @@ function setMainWindowListeners() {
   const ipcChannels = new KnowledgeIpc();
 }
 
+app.on("second-instance", () => {
+  if (kcMainWindow) {
+    if (kcMainWindow.isMinimized()) kcMainWindow.restore();
+    kcMainWindow.focus();
+  }
+});
+
 app.on("window-all-closed", function () {
   // MacOS apps typically do not quit all the way when a window is closed...
   if (process.platform !== "darwin") app.quit();
@@ -190,22 +212,34 @@ app.on("activate", () => {
   }
 });
 
-app.on("ready", function () {
-  // Create window but wait to load and show until after update
-  createMainWindow();
+/**
+ * Update checks are opt-in. Set KC_ENABLE_UPDATES=1 in a packaged build to
+ * enable them. The check runs after the window loads and never blocks startup.
+ */
+function updatesEnabled() {
+  return app.isPackaged && process.env.KC_ENABLE_UPDATES === "1";
+}
+
+function checkForUpdates() {
+  if (!updatesEnabled()) {
+    console.log("[Knowledge]: update check disabled (set KC_ENABLE_UPDATES=1)");
+    return;
+  }
 
   autoUpdater
     .checkForUpdatesAndNotify()
     .then((update: UpdateCheckResult | null) => {
       if (update) {
-        // TODO: take action on new versions, such as an "Updating" window or compatibility checks
         console.log("Update Check Results: ", update);
       }
     })
     .catch((reason: any) => {
       console.error("Update Check Error: ", reason);
-    })
-    .finally(() => {
-      kcMainWindow.loadFile(MAIN_ENTRY);
     });
+}
+
+app.on("ready", function () {
+  createMainWindow();
+  kcMainWindow.loadFile(MAIN_ENTRY);
+  checkForUpdates();
 });

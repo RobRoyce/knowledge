@@ -17,7 +17,7 @@ import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service'
 import { ExtractorService } from '@services/ingest-services/extractor.service';
 import { FaviconService } from '@services/ingest-services/favicon.service';
 import { FileSourceModel } from '@shared/models/file.source.model';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import {
   IngestType,
   KnowledgeSource,
@@ -30,6 +30,7 @@ import { SettingsService } from '@services/ipc-services/settings.service';
 import { UUID } from '@shared/models/uuid.model';
 import { UuidService } from '@services/ipc-services/uuid.service';
 import { map } from 'rxjs/operators';
+import { EXAMPLE_SOURCES } from './examples';
 
 export interface KnowledgeSourceFactoryRequest {
   ingestType: IngestType;
@@ -66,17 +67,9 @@ export class KsFactoryService {
   }
 
   examples(): Observable<KnowledgeSource[]> {
-    return this.http
-      .get('https://knowledge-app.s3.us-west-1.amazonaws.com/examples.json', {
-        responseType: 'json',
-        headers: new HttpHeaders({
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache',
-          Expires: 'Sat, 01 Jan 2000 00:00:00 GMT',
-        }),
-      })
+    return of(EXAMPLE_SOURCES.map((example) => ({ ...example })))
       .pipe(
-        map((example: any) => {
+        map((example: ExampleSource[]) => {
           let examples: ExampleSource[] = example;
           this.shuffleArray(examples);
           examples = examples.slice(0, 6);
@@ -252,25 +245,6 @@ export class KsFactoryService {
     const source = new SourceModel(fileModel, undefined);
     const ref = new KnowledgeSourceReference('file', source, link);
     return new KnowledgeSource(file.name.trim(), uuid, 'file', ref);
-  }
-
-  private getFileMetadata(
-    ks: KnowledgeSource,
-    file: File
-  ): Promise<KnowledgeSource> {
-    return new Promise<KnowledgeSource>((resolve) => {
-      this.extractor
-        .textFromFile(file)
-        .then((results) => {
-          ks.rawText = results;
-        })
-        .catch((reason) => {
-          console.warn('Could not extract text from file: ', reason);
-        })
-        .finally(() => {
-          resolve(ks);
-        });
-    });
   }
 
   private getFileIcon(ks: KnowledgeSource): Promise<KnowledgeSource> {

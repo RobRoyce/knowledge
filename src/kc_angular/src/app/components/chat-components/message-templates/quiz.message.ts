@@ -37,7 +37,7 @@ interface QuizQuestion {
         <div>
           <div (dragstart)="$event.preventDefault()">
             <img
-              src="https://knowledge-app.s3.us-west-1.amazonaws.com/kc-icon-transparent.png"
+              src="assets/img/kc-icon-transparent.png"
               alt="Knowledge Logo"
               class="knowledge-logo pulsate-fwd"
             />

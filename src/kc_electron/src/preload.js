@@ -55,7 +55,7 @@ const ipcSendChannels = [
   "A2E:Window:ZoomIn",
 ];
 
-const ipcInvokeChannels = [];
+const ipcInvokeChannels = ["A2E:Backend:Info"];
 
 const ipcReceiveOnceChannels = [
   "E2A:BrowserView:Close",
@@ -98,11 +98,12 @@ contextBridge.exposeInMainWorld("api", {
         `[Debug]-[${datetime()}]-[Electron IPC]: Invoke - Invoked on ${channel} with data: `,
         data
       );
-      ipcRenderer.invoke(channel, data);
+      return ipcRenderer.invoke(channel, data);
     } else {
       console.error(
         `[Error]-[${datetime()}]-[Electron IPC]: Invalid Invoke Channel -- ${channel}`
       );
+      return Promise.reject(new Error(`Invalid invoke channel: ${channel}`));
     }
   },
   send: (channel, data) => {

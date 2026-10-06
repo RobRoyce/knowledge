@@ -29,3 +29,9 @@ auth.json
 !.yarn/versions
 
 *.d.ts
+
+# Local development data profiles
+.dev-profiles/
+
+# End-to-end test output
+e2e/.output/
