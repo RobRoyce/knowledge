@@ -35,3 +35,6 @@ auth.json
 
 # End-to-end test output
 e2e/.output/
+
+# Prepared Node.js runtime for packaging
+vendor/

@@ -15,11 +15,17 @@
  */
 
 /*
- * Starts the standalone storage service (src/kc_storage) with Node.js.
+ * Starts the standalone storage service (kc_storage) with Node.js.
  *
- * Electron's own Node.js is too old for node:sqlite, so the service runs
- * with the Node.js on PATH, or with KC_NODE. The service stops when this
- * process closes its standard input, including after a crash.
+ * Electron's own Node.js is too old for node:sqlite, so the service runs in
+ * a separate Node.js 24 process:
+ *
+ *   Packaged:    Resources/node/bin/node (bundled) and Resources/kc_storage.
+ *                PATH, KC_NODE, and the working directory are not used.
+ *   Unpackaged:  KC_NODE or node from PATH, and <repo>/src/kc_storage.
+ *
+ * The service stops when this process closes its standard input, including
+ * after a crash.
  */
 
 import { spawn, ChildProcess } from "child_process";
@@ -32,20 +38,48 @@ const START_TIMEOUT_MS = 20000;
 
 let child: ChildProcess | undefined;
 
+interface ServiceLocation {
+  node: string;
+  entry: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+}
+
+function serviceLocation(token: string): ServiceLocation {
+  if (app.isPackaged) {
+    const resources = process.resourcesPath;
+    return {
+      node: path.join(resources, "node", "bin", "node"),
+      entry: path.join(resources, "kc_storage", "src", "main.ts"),
+      cwd: resources,
+      env: { KC_STORAGE_TOKEN: token },
+    };
+  }
+  // Only the variables the service needs. ELECTRON_RUN_AS_NODE and
+  // test-runner variables must not reach it.
+  return {
+    node: process.env.KC_NODE || "node",
+    entry: path.join(app.getAppPath(), "src", "kc_storage", "src", "main.ts"),
+    cwd: app.getAppPath(),
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      KC_STORAGE_TOKEN: token,
+    },
+  };
+}
+
 export function startStorageService(dataDir: string): Promise<BackendEndpoint> {
-  const entry = path.join(
-    app.getAppPath(),
-    "src",
-    "kc_storage",
-    "src",
-    "main.ts"
-  );
-  const node = process.env.KC_NODE || "node";
   const token = newToken();
+  const { node, entry, cwd, env } = serviceLocation(token);
 
   return new Promise((resolve) => {
     if (!fs.existsSync(entry)) {
       resolve({ error: `Storage service not found at ${entry}.` });
+      return;
+    }
+    if (app.isPackaged && !fs.existsSync(node)) {
+      resolve({ error: `Bundled Node.js runtime not found at ${node}.` });
       return;
     }
 
@@ -56,14 +90,6 @@ export function startStorageService(dataDir: string): Promise<BackendEndpoint> {
         settled = true;
         resolve(endpoint);
       }
-    };
-
-    // Only the variables the service needs. ELECTRON_RUN_AS_NODE and
-    // test-runner variables must not reach it.
-    const env: NodeJS.ProcessEnv = {
-      PATH: process.env.PATH,
-      HOME: process.env.HOME,
-      KC_STORAGE_TOKEN: token,
     };
 
     child = spawn(
@@ -79,8 +105,10 @@ export function startStorageService(dataDir: string): Promise<BackendEndpoint> {
         "null",
         "--exit-on-stdin-close",
       ],
-      { env, stdio: ["pipe", "pipe", "pipe"] }
+      { cwd, env, stdio: ["pipe", "pipe", "pipe"] }
     );
+
+    console.log(`[Knowledge]: storage service runtime: ${node} ${entry}`);
 
     const timer = setTimeout(() => {
       finish({
@@ -92,7 +120,9 @@ export function startStorageService(dataDir: string): Promise<BackendEndpoint> {
     child.on("error", (e) => {
       clearTimeout(timer);
       finish({
-        error: `Could not run "${node}": ${e.message}. Install Node.js 24 or set KC_NODE.`,
+        error: app.isPackaged
+          ? `Could not run the bundled Node.js runtime (${node}): ${e.message}.`
+          : `Could not run "${node}": ${e.message}. Install Node.js 24 or set KC_NODE.`,
       });
     });
 
