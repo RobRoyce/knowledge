@@ -22,6 +22,9 @@ export interface DataDir {
 
 export const DATABASE_FILE = "library.sqlite";
 
+/** Staging directories of restores that are not active yet. */
+export const RESTORE_DIR = "restore";
+
 function alive(pid: number) {
   try {
     process.kill(pid, 0);
@@ -84,6 +87,13 @@ export function openDataDir(root: string): DataDir {
 
     // Recover from an interrupted upload, migration, or restore
     const swept = assets.sweep(library.assetIds());
+    const staging = path.join(resolved, RESTORE_DIR);
+    if (fs.existsSync(staging)) {
+      for (const entry of fs.readdirSync(staging)) {
+        fs.rmSync(path.join(staging, entry), { recursive: true, force: true });
+        swept.push(`${RESTORE_DIR}/${entry}`);
+      }
+    }
 
     return {
       root: resolved,

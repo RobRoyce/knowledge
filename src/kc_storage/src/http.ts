@@ -11,8 +11,22 @@ import {
   ASSET_ORIGINAL_PATH_HEADER,
   type ErrorResponse,
   type HealthResponse,
+  type LibraryStatus,
 } from "../../kc_contracts/storage.ts";
 import { writeBackup } from "./backup.ts";
+import {
+  activateRestore,
+  assertEmpty,
+  discardRestore,
+  newStagingDir,
+  RESTORE_LIMITS,
+  RestoreError,
+  stageRestore,
+  type StagedRestore,
+} from "./restore.ts";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import { Transform } from "node:stream";
 import type { DataDir } from "./datadir.ts";
 import { now, SCHEMA_VERSION } from "./db.ts";
 import {
@@ -32,6 +46,9 @@ import {
   validSource,
 } from "./validate.ts";
 import { VERSION } from "./version.ts";
+
+/** How long a validated restore waits for confirmation. */
+const RESTORE_PENDING_MS = 30 * 60 * 1000;
 
 export interface ServerOptions {
   dir: DataDir;
@@ -98,6 +115,41 @@ export function createServer(options: ServerOptions): http.Server {
   const { library, assets } = dir;
   const maxJson = options.maxJsonBytes ?? 10 * 1024 * 1024;
   const maxUpload = options.maxUploadBytes ?? 2 * 1024 ** 3;
+
+  // A validated restore waits here for confirmation. One at a time.
+  let pending: { staged: StagedRestore; timer: NodeJS.Timeout } | undefined;
+  const dropPending = () => {
+    if (pending) {
+      clearTimeout(pending.timer);
+      discardRestore(pending.staged);
+      pending = undefined;
+    }
+  };
+
+  async function receiveArchive(req: IncomingMessage, file: string) {
+    const declared = Number(req.headers["content-length"] ?? 0);
+    if (declared > RESTORE_LIMITS.archiveBytes) {
+      throw tooLarge(
+        `The backup is larger than ${RESTORE_LIMITS.archiveBytes} bytes.`
+      );
+    }
+    let size = 0;
+    const meter = new Transform({
+      transform(chunk: Buffer, _enc, done) {
+        size += chunk.length;
+        if (size > RESTORE_LIMITS.archiveBytes) {
+          done(
+            tooLarge(
+              `The backup is larger than ${RESTORE_LIMITS.archiveBytes} bytes.`
+            )
+          );
+          return;
+        }
+        done(null, chunk);
+      },
+    });
+    await pipeline(req, meter, fs.createWriteStream(file, { flags: "wx" }));
+  }
 
   async function route(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -231,6 +283,54 @@ export function createServer(options: ServerOptions): http.Server {
       }
     }
 
+    if (resource === "library" && !id && method === "GET") {
+      const counts = library.counts();
+      const status: LibraryStatus = {
+        empty: counts.projects + counts.sources + counts.assets === 0,
+        counts,
+      };
+      return send(res, 200, status);
+    }
+
+    if (resource === "restores") {
+      // Upload and validate. Nothing becomes active.
+      if (method === "POST" && !id) {
+        assertEmpty(dir);
+        dropPending();
+        const staging = newStagingDir(dir);
+        const archive = path.join(staging.stagingDir, "archive.tar");
+        try {
+          await receiveArchive(req, archive);
+        } catch (e) {
+          fs.rmSync(staging.stagingDir, { recursive: true, force: true });
+          throw e;
+        }
+        const staged = await stageRestore(dir, archive, staging);
+        fs.rmSync(archive, { force: true });
+        const timer = setTimeout(dropPending, RESTORE_PENDING_MS);
+        timer.unref();
+        pending = { staged, timer };
+        return send(res, 201, { restore: staged.preview });
+      }
+
+      const current = pending && pending.staged.id === id ? pending : undefined;
+      if (id && !sub && method === "DELETE") {
+        if (current) dropPending();
+        return send(res, 204);
+      }
+      if (id && sub === "activate" && method === "POST") {
+        if (!current) {
+          throw notFound(
+            "This restore is not pending. It expired or the service restarted. Select the backup again."
+          );
+        }
+        clearTimeout(current.timer);
+        pending = undefined;
+        const restored = activateRestore(dir, current.staged);
+        return send(res, 200, { restored });
+      }
+    }
+
     if (resource === "backup" && !id && method === "GET") {
       const date = new Date().toISOString().slice(0, 10);
       res.writeHead(200, {
@@ -277,12 +377,14 @@ export function createServer(options: ServerOptions): http.Server {
       const error =
         e instanceof StorageError
           ? e
+          : e instanceof RestoreError
+          ? badRequest(e.message)
           : new StorageError(
               500,
               "internal",
               "Internal error. See the service log."
             );
-      if (!(e instanceof StorageError)) {
+      if (!(e instanceof StorageError) && !(e instanceof RestoreError)) {
         console.error(
           `[kc-storage] ${req.method} ${req.url}: ${e?.stack ?? e}`
         );

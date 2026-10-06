@@ -6,7 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import type { AddressInfo } from "node:net";
-import { restoreBackup, writeBackup } from "./backup.ts";
+import { writeBackup } from "./backup.ts";
+import { activateRestore, assertEmpty, stageRestore } from "./restore.ts";
 import { openDataDir } from "./datadir.ts";
 import { createServer } from "./http.ts";
 import { migrate } from "./migrate.ts";
@@ -106,10 +107,23 @@ export async function main(argv: string[]) {
     }
     case "restore": {
       if (!values.from) fail("--from is required.");
-      const result = await restoreBackup(values.from, dataDir);
-      console.log(
-        JSON.stringify({ restored: result, dataDir: path.resolve(dataDir) })
-      );
+      // Same validation and activation as the HTTP API
+      const dir = openDataDir(dataDir);
+      try {
+        assertEmpty(dir);
+        const staged = await stageRestore(dir, values.from);
+        const result = activateRestore(dir, staged);
+        console.log(
+          JSON.stringify({
+            restored: result,
+            warnings: staged.preview.warnings,
+            notIncluded: staged.preview.notIncluded,
+            dataDir: dir.root,
+          })
+        );
+      } finally {
+        dir.close();
+      }
       return;
     }
     default:

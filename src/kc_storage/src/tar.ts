@@ -8,7 +8,13 @@ import { Readable, type Writable } from "node:stream";
 
 const BLOCK = 512;
 
-function header(name: string, size: number, mtime: Date): Buffer {
+/** A ustar header. Type "0" is a regular file. Tests use other types. */
+export function tarHeader(
+  name: string,
+  size: number,
+  mtime: Date,
+  type = "0"
+): Buffer {
   if (Buffer.byteLength(name) > 100) {
     throw new Error(`Tar entry name is too long: ${name}`);
   }
@@ -23,7 +29,7 @@ function header(name: string, size: number, mtime: Date): Buffer {
   h.write(octal(size, 12), 124, 12, "ascii");
   h.write(octal(Math.floor(mtime.getTime() / 1000), 12), 136, 12, "ascii");
   h.write("        ", 148, 8, "ascii");
-  h.write("0", 156, 1, "ascii");
+  h.write(type, 156, 1, "ascii");
   h.write("ustar\0", 257, 6, "ascii");
   h.write("00", 263, 2, "ascii");
 
@@ -51,14 +57,14 @@ export class TarWriter {
   }
 
   async addBuffer(name: string, data: Buffer) {
-    await this.write(header(name, data.length, new Date()));
+    await this.write(tarHeader(name, data.length, new Date()));
     await this.write(data);
     await this.write(padding(data.length));
   }
 
   async addFile(name: string, file: string) {
     const { size, mtime } = fs.statSync(file);
-    await this.write(header(name, size, mtime));
+    await this.write(tarHeader(name, size, mtime));
     let written = 0;
     for await (const chunk of fs.createReadStream(file)) {
       written += chunk.length;
@@ -81,8 +87,21 @@ export interface TarEntry {
   size: number;
 }
 
-/** Read the entry index of a tar file. Validates every header checksum. */
-export function readTarIndex(file: string): Map<string, TarEntry> {
+export interface TarLimits {
+  /** Accept only these entry names. */
+  allowName: (name: string) => boolean;
+  maxEntries: number;
+}
+
+/**
+ * Read the entry index of a tar file. Rejects bad checksums, entry types
+ * other than regular files, the ustar prefix field, duplicate names, and
+ * names that allowName refuses. Entry names are never used as paths.
+ */
+export function readTarIndex(
+  file: string,
+  limits: TarLimits
+): Map<string, TarEntry> {
   const fd = fs.openSync(file, "r");
   const entries = new Map<string, TarEntry>();
   try {
@@ -106,12 +125,34 @@ export function readTarIndex(file: string): Map<string, TarEntry> {
       const name = h.toString("utf8", 0, 100).replace(/\0.*$/s, "");
       const size = parseInt(h.toString("ascii", 124, 136).trim(), 8);
       const type = h.toString("ascii", 156, 157);
+      const prefix = h.toString("utf8", 345, 500).replace(/\0.*$/s, "");
+
+      if (type !== "0" && type !== "\0") {
+        throw new Error(
+          `Unsupported tar entry type "${type}" for ${JSON.stringify(name)}.`
+        );
+      }
+      if (prefix) {
+        throw new Error(
+          `Unsupported tar name prefix for ${JSON.stringify(name)}.`
+        );
+      }
+      if (!limits.allowName(name)) {
+        throw new Error(`Unexpected tar entry ${JSON.stringify(name)}.`);
+      }
+      if (entries.has(name)) {
+        throw new Error(`Duplicate tar entry ${JSON.stringify(name)}.`);
+      }
       if (!Number.isFinite(size) || size < 0 || offset + BLOCK + size > total) {
-        throw new Error(`Invalid tar entry size for ${name}.`);
+        throw new Error(`Invalid tar entry size for ${JSON.stringify(name)}.`);
       }
-      if (type === "0" || type === "\0") {
-        entries.set(name, { name, offset: offset + BLOCK, size });
+      if (entries.size >= limits.maxEntries) {
+        throw new Error(
+          `The archive has more than ${limits.maxEntries} entries.`
+        );
       }
+
+      entries.set(name, { name, offset: offset + BLOCK, size });
       offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
     }
     throw new Error("The tar file ends without an end-of-archive marker.");

@@ -90,6 +90,25 @@ export interface SourceList {
 export const ASSET_FILENAME_HEADER = "x-knowledge-filename";
 export const ASSET_ORIGINAL_PATH_HEADER = "x-knowledge-original-path";
 
+/** GET /v1/library */
+export interface LibraryStatus {
+  empty: boolean;
+  counts: { projects: number; sources: number; assets: number };
+}
+
+/** Result of POST /v1/restores: a validated backup that is not active yet. */
+export interface RestorePreview {
+  id: string;
+  backupCreatedAt: string | null;
+  backupVersion: number;
+  counts: { projects: number; sources: number; assets: number; bytes: number };
+  /** First 50 project names. */
+  projectNames: string[];
+  warnings: string[];
+  /** Data that a library backup never contains. */
+  notIncluded: string[];
+}
+
 export interface LibraryBackupManifest {
   format: "knowledge-library-backup";
   version: 1;

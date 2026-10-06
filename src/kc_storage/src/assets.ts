@@ -34,9 +34,16 @@ export class AssetStore {
     return path.join(this.root, id.slice(0, 2), id);
   }
 
-  /** Write a stream to a temporary file and hash it. */
-  async stage(input: Readable, maxBytes: number): Promise<StagedFile> {
-    const tmpPath = path.join(this.tmpDir, crypto.randomUUID());
+  /**
+   * Write a stream to a temporary file and hash it. The directory must be
+   * on the same filesystem as the store (default: assets/tmp).
+   */
+  async stage(
+    input: Readable,
+    maxBytes: number,
+    dir = this.tmpDir
+  ): Promise<StagedFile> {
+    const tmpPath = path.join(dir, crypto.randomUUID());
     const hash = crypto.createHash("sha256");
     let size = 0;
 
