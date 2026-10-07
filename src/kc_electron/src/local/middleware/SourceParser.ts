@@ -117,7 +117,8 @@ export class SourceParser {
 
   static async fromPdf(filePath: string) {
     const dataBuffer = fs.readFileSync(filePath);
-    const uint8Array = new Uint8Array(dataBuffer.buffer);
+    // Copy the bytes. A Buffer can be a view into a larger shared pool.
+    const uint8Array = new Uint8Array(dataBuffer);
 
     try {
       // Load the PDF file using PDF.js

@@ -10,7 +10,7 @@ You do not need AWS, an Apple developer account, or an AI API key.
 | macOS | 26.6 (arm64) | Verified. Linux and Windows are not verified. |
 | Node.js | 24.21.0 | Verified. Development builds, tests, and the unpackaged app use it. |
 | Yarn | 3.2.4 | The repository contains this version (`.yarnrc.yml` `yarnPath`). Any global `yarn` starts it. |
-| Electron | 26.3.0 | Installed by Yarn. |
+| Electron | 44.6.0 | Supported until 2027-03-02. The binary downloads on first use (see Setup). |
 
 No native compiler is necessary. The install does not build `canvas`.
 
@@ -24,7 +24,7 @@ the built-in `node:sqlite` module.
 
 Compatibility note: Angular 14 officially supports Node.js 14.15+ and 16.10+ only.
 Node.js 24 builds and runs this branch, but it is outside the official range.
-Electron 26 is end-of-life. Upgrade these in a separate step.
+Upgrade Angular in a separate step (see [docs/follow-ups.md](docs/follow-ups.md)).
 
 ## Setup
 
@@ -35,6 +35,11 @@ yarn start
 ```
 
 `yarn start-dev` does the build and the start in one command.
+
+Since Electron 42, `yarn install` does not download the Electron binary.
+The first `yarn start` (or the first end-to-end test) downloads it and
+checks it against `node_modules/electron/checksums.json`. To download it
+before you go offline: `node -e 'require("electron")'`.
 
 ## Architecture
 
@@ -337,6 +342,9 @@ The end-to-end tests start the real app with new, empty profiles in
   thumbnail and extract text from the managed copy, export the library,
   restore it into a second profile through Settings > Backup, and show the
   PDF there.
+- `e2e/embedded-browser.e2e.mjs`: opens a website source in the desktop
+  Browser tab (`WebContentsView`), checks its URL, resizing, and navigation
+  state, and checks that closing removes it.
 - `e2e/isolation.e2e.mjs`: two profiles at the same time get different chat
   and storage addresses and tokens. Each server rejects the other
   instance's requests. A second start of the same profile exits.

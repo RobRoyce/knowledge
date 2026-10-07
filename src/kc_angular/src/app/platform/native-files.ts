@@ -40,7 +40,7 @@ export class DesktopNativeFiles extends NativeFiles {
   readonly available = true;
 
   pathOf(file: File) {
-    const path = (file as any).path;
+    const path = window.api.pathForFile(file);
     return typeof path === 'string' && path ? path : null;
   }
 

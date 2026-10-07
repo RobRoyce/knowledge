@@ -10,14 +10,16 @@ import { _electron as electron } from "playwright-core";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 export const REPO = path.resolve(import.meta.dirname, "..");
 export const FIXTURES = path.join(REPO, "e2e", "fixtures");
 
-export const ELECTRON = path.join(
-  REPO,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
-);
+/**
+ * The Electron binary. Since Electron 42 the package downloads it on first
+ * use (checked against the package's checksums.json), not at install.
+ */
+export const ELECTRON = createRequire(import.meta.url)("electron");
 
 /**
  * Environment for the app. The Node test runner sets NODE_TEST_CONTEXT in

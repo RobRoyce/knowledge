@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 /**
  * IPC Channels must be placed in one of the following lists before it
@@ -96,6 +96,11 @@ let datetime = () => {
 };
 
 contextBridge.exposeInMainWorld("api", {
+  /**
+   * Local path of a File the user selected or dropped. Electron removed
+   * File.path in version 32. Returns "" for files without a local path.
+   */
+  pathForFile: (file) => webUtils.getPathForFile(file),
   invoke: (channel, data) => {
     if (ipcInvokeChannels.includes(channel)) {
       console.debug(
