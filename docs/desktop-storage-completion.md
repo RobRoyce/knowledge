@@ -105,3 +105,34 @@ The command line `restore` uses the same validation and activation code.
   outside the repository, `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, no
   credentials. The full workflow with UI restore, the service command line
   checked for the bundled runtime, two instances, process cleanup.
+
+## Verified (2026-10-06, macOS 26.6 arm64)
+
+| Command | Result |
+| --- | --- |
+| `yarn install --immutable` | Pass |
+| `yarn build-dev` | Pass |
+| `yarn test` | 8 of 8 pass |
+| `yarn test-storage` | 22 of 22 pass |
+| `yarn workspace kc_storage typecheck` | Pass |
+| `yarn e2e` | 2 of 2 pass (UI restore in the development app) |
+| `yarn package-local` | Pass. Unsigned `dist/mac-arm64/Knowledge.app`, about 440 MB. |
+| `yarn e2e-packaged` | 1 of 1 pass |
+
+The packaged test ran the app from a copy in `$TMPDIR`, with
+`PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`which node` fails), and the working
+directory outside the repository. The service command line was:
+
+```
+<copy>/Knowledge.app/Contents/Resources/node/bin/node
+  <copy>/Knowledge.app/Contents/Resources/kc_storage/src/main.ts serve
+  --data-dir <profile>/data/library --port 0 --allow-origin null --exit-on-stdin-close
+```
+
+The service working directory was `Contents/Resources`. No service process
+remained after the app closed.
+
+Also verified by hand: the storage service accepts connections on
+`127.0.0.1` only. A connection to the computer's network address is refused.
+
+Not verified: signed or notarized builds, macOS x64, Linux, Windows.
