@@ -31,14 +31,19 @@ import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { AutoscanService } from '@services/ingest-services/autoscan.service';
 import { NotificationsService } from '@services/user-services/notifications.service';
 import { BackendService } from '@services/ipc-services/backend.service';
-import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service';
+import { NativeFiles } from '@app/platform/native-files';
 import {
   projectToRecord,
   recordToProject,
   recordToSource,
   sourceToRecord,
 } from '@contracts/mapping';
+import {
+  ASSET_FILENAME_HEADER,
+  ASSET_ORIGINAL_PATH_HEADER,
+} from '@contracts/storage';
 import type {
+  AssetRecord,
   LibraryStatus,
   ProjectList,
   ProjectRecord,
@@ -65,7 +70,7 @@ export class StorageService {
   constructor(
     private http: HttpClient,
     private backend: BackendService,
-    private ipc: ElectronIpcService,
+    private native: NativeFiles,
     private autoscan: AutoscanService,
     private notifications: NotificationsService
   ) {}
@@ -213,12 +218,43 @@ export class StorageService {
     }
   }
 
+  /**
+   * Upload the bytes of a selected file. The service returns the managed
+   * asset. Desktop and browser use this same operation. The original path
+   * is sent as information only, when the desktop knows it.
+   */
+  async uploadFile(
+    file: File,
+    originalPath: string | null
+  ): Promise<AssetRecord> {
+    const headers: Record<string, string> = {
+      'Content-Type': file.type || 'application/octet-stream',
+      [ASSET_FILENAME_HEADER]: encodeURIComponent(file.name),
+    };
+    if (originalPath) {
+      headers[ASSET_ORIGINAL_PATH_HEADER] = encodeURIComponent(originalPath);
+    }
+    const { asset } = await firstValueFrom(
+      this.http.post<{ asset: AssetRecord }>(`${this.api}/assets`, file, {
+        headers,
+      })
+    );
+    return asset;
+  }
+
+  /**
+   * A file source without a managed copy, for example from a watched
+   * folder (desktop). Copy it by path through the desktop app.
+   */
   private async copyFile(ks: KnowledgeSource) {
     const file = ks.reference?.source?.file;
     const path =
       file?.path ?? (typeof ks.accessLink === 'string' ? ks.accessLink : '');
     try {
-      const asset = await this.ipc.importFile(path, file?.type || undefined);
+      const asset = await this.native.importFromPath(
+        path,
+        file?.type || undefined
+      );
       ks.assetId = asset.id;
     } catch (e) {
       // The source is saved without a managed copy. Report it.
@@ -249,11 +285,6 @@ export class StorageService {
       }
     }
     this.synced.delete(key);
-  }
-
-  /** URL of a managed file's content. Fetch it with HttpClient (adds the token). */
-  assetContentUrl(assetId: string) {
-    return `${this.api}/assets/${assetId}/content`;
   }
 
   /** Download the library backup (projects, sources, managed files). */

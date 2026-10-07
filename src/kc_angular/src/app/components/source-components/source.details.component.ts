@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import {
   Component,
   ElementRef,
@@ -290,7 +291,8 @@ export class SourceDetailsComponent implements OnInit {
     private command: KsCommandService,
     private ipc: ElectronIpcService,
     private notify: NotificationsService,
-    private search: SearchService
+    private search: SearchService,
+    private platform: Platform
   ) {
     this.form = this.fb.group({
       title: ['', Validators.required],
@@ -387,7 +389,7 @@ export class SourceDetailsComponent implements OnInit {
   }
 
   show(accessLink: URL | string) {
-    if (typeof accessLink === 'string') {
+    if (typeof accessLink === 'string' && this.platform.has('showInFolder')) {
       this.ipc.showItemInFolder(accessLink);
       this.notify.debug('Source Info', 'Locating Folder', location, 'toast');
     } else {

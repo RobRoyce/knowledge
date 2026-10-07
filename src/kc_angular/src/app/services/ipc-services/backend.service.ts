@@ -35,13 +35,23 @@ export interface BackendInfo {
 }
 
 /**
- * Addresses and tokens of the local servers that belong to this instance.
- * Electron provides them through IPC. Load before the app starts.
+ * How this client reaches the library API (and chat) and authorizes its
+ * requests. One implementation per platform, chosen at startup.
  */
-@Injectable({
-  providedIn: 'root',
-})
-export class BackendService {
+export abstract class BackendService {
+  abstract get chat(): BackendEndpoint;
+  abstract get storage(): BackendEndpoint;
+  abstract load(): Promise<void>;
+  /** Add the credentials that this request needs, if it goes to our servers. */
+  abstract authorize(req: HttpRequest<unknown>): HttpRequest<unknown>;
+}
+
+/**
+ * Desktop: Electron gives the addresses and bearer tokens of this
+ * instance's local servers through IPC.
+ */
+@Injectable()
+export class DesktopBackendService extends BackendService {
   private info: BackendInfo = {
     chat: { error: 'Backend information not loaded.' },
     storage: { error: 'Backend information not loaded.' },
@@ -69,19 +79,83 @@ export class BackendService {
     }
   }
 
-  /** Bearer token for a URL that belongs to this instance, if any. */
-  tokenFor(url: string): string | undefined {
+  authorize(req: HttpRequest<unknown>) {
     for (const endpoint of Object.values(this.info)) {
       if (
         endpoint.url &&
         endpoint.token &&
-        url.startsWith(endpoint.url + '/')
+        req.url.startsWith(endpoint.url + '/')
       ) {
-        return endpoint.token;
+        return req.clone({
+          setHeaders: { Authorization: `Bearer ${endpoint.token}` },
+        });
       }
     }
-    return undefined;
+    return req;
   }
+}
+
+/**
+ * Browser: the storage service serves this page, so the API is on the
+ * same origin. A launch code in the URL fragment starts a session cookie.
+ * State-changing requests carry the CSRF token, which stays in memory.
+ */
+@Injectable()
+export class BrowserBackendService extends BackendService {
+  private csrfToken = '';
+  private storageEndpoint: BackendEndpoint = { error: 'No browser session.' };
+
+  get chat(): BackendEndpoint {
+    return { error: 'Chat is available in the desktop app.' };
+  }
+
+  get storage(): BackendEndpoint {
+    return this.storageEndpoint;
+  }
+
+  async load() {
+    const code = new URLSearchParams(location.hash.slice(1)).get('launch');
+    if (code) {
+      // Remove the one-time code from the address bar and history
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+
+    const res = code
+      ? await fetch('/v1/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        })
+      : await fetch('/v1/session');
+
+    if (res.ok) {
+      this.csrfToken = (await res.json()).csrfToken;
+      this.storageEndpoint = { url: location.origin };
+    } else {
+      const message = await res
+        .json()
+        .then((b) => b?.error?.message)
+        .catch(() => undefined);
+      this.storageEndpoint = {
+        error:
+          message ??
+          'No browser session. Open the launch link that "yarn browser" prints.',
+      };
+    }
+  }
+
+  authorize(req: HttpRequest<unknown>) {
+    const sameOrigin =
+      req.url.startsWith('/') || req.url.startsWith(location.origin + '/');
+    if (sameOrigin && !['GET', 'HEAD'].includes(req.method) && this.csrfToken) {
+      return req.clone({ setHeaders: { 'X-Knowledge-CSRF': this.csrfToken } });
+    }
+    return req;
+  }
+}
+
+export function backendServiceFactory(desktop: boolean): BackendService {
+  return desktop ? new DesktopBackendService() : new BrowserBackendService();
 }
 
 @Injectable()
@@ -92,13 +166,7 @@ export class BackendAuthInterceptor implements HttpInterceptor {
     req: HttpRequest<unknown>,
     next: HttpHandler
   ): Observable<HttpEvent<unknown>> {
-    const token = this.backend.tokenFor(req.url);
-    if (!token) {
-      return next.handle(req);
-    }
-    return next.handle(
-      req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-    );
+    return next.handle(this.backend.authorize(req));
   }
 }
 

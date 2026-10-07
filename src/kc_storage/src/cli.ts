@@ -18,13 +18,17 @@ const USAGE = `kc-storage ${VERSION}
 Usage:
   node src/main.ts serve   --data-dir <dir> [--port <n>] [--allow-origin <origin>]...
                            [--max-upload-mb <n>] [--exit-on-stdin-close]
+                           [--web-root <dir> [--session-idle-minutes <n>]
+                            [--session-max-hours <n>] [--launch-code-minutes <n>]]
   node src/main.ts migrate --data-dir <dir> --from <knowledge-backup.json> [--dry-run]
   node src/main.ts backup  --data-dir <dir> --out <file.tar>
   node src/main.ts restore --data-dir <empty dir> --from <file.tar>
 
 serve needs the bearer token in the KC_STORAGE_TOKEN environment variable.
 serve listens on 127.0.0.1 only. Port 0 (default) picks a free port.
-When ready, serve prints one JSON line: {"event":"ready","url":...}.`;
+When ready, serve prints one JSON line: {"event":"ready","url":...}.
+--web-root serves the browser UI from <dir> and enables browser sessions.
+Use scripts/start-browser.mjs (yarn browser) to start it with a launch link.`;
 
 function fail(message: string): never {
   console.error(`kc-storage: ${message}`);
@@ -43,6 +47,10 @@ export async function main(argv: string[]) {
         "allow-origin": { type: "string", multiple: true, default: [] },
         "exit-on-stdin-close": { type: "boolean", default: false },
         "max-upload-mb": { type: "string", default: "2048" },
+        "web-root": { type: "string" },
+        "session-idle-minutes": { type: "string", default: "30" },
+        "session-max-hours": { type: "string", default: "12" },
+        "launch-code-minutes": { type: "string", default: "5" },
         from: { type: "string" },
         out: { type: "string" },
         "dry-run": { type: "boolean", default: false },
@@ -170,11 +178,23 @@ function serve(dataDir: string, values: Record<string, any>) {
       `[kc-storage] removed ${dir.swept.length} unreferenced or temporary files`
     );
   }
+  const minutes = (name: string) => {
+    const n = Number(values[name]);
+    if (!Number.isFinite(n) || n <= 0)
+      fail(`--${name} must be a positive number.`);
+    return n * 60 * 1000;
+  };
   const server = createServer({
     dir,
     token,
     allowedOrigins: values["allow-origin"],
     maxUploadBytes: Math.floor(maxUploadMb * 1024 * 1024),
+    webRoot: values["web-root"],
+    sessionOptions: {
+      idleMs: minutes("session-idle-minutes"),
+      maxMs: minutes("session-max-hours") * 60,
+      launchCodeMs: minutes("launch-code-minutes"),
+    },
   });
 
   let stopping = false;
@@ -215,6 +235,7 @@ function serve(dataDir: string, values: Record<string, any>) {
         url: `http://127.0.0.1:${actual}`,
         version: VERSION,
         dataDir: dir.root,
+        webUi: Boolean(values["web-root"]),
       })
     );
   });

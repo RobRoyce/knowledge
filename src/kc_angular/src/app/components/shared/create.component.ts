@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
 import { Component, SecurityContext } from '@angular/core';
 import { ProjectCreationDialogComponent } from '../project-components/project-creation-dialog.component';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -86,6 +87,8 @@ import { ConfirmationService } from 'primeng/api';
         [tipShowOnHover]="true"
         icon="pi pi-link"
         class="p-button-text outline-none shadow-none non-header"
+        [disabled]="!platform.has('saveWebsite')"
+        [title]="platform.unavailable('saveWebsite')"
         (click)="showImportDialog = true"
       >
         +
@@ -158,7 +161,8 @@ export class CreateComponent {
     private favicon: FaviconService,
     private formBuilder: FormBuilder,
     private sanitizer: DomSanitizer,
-    private httpClient: HttpClient
+    private httpClient: HttpClient,
+    public platform: Platform
   ) {
     this.linkForm = formBuilder.group({
       url: ['', [Validators.required, Validators.pattern('https?://.+[.]+.+')]],

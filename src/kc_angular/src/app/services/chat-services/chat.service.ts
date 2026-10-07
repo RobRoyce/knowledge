@@ -487,6 +487,11 @@ export class ChatService {
    * and a successful response from the backend.
    */
   private checkConnection() {
+    // No chat server (for example, in the browser client)
+    if (!this.backendUrl) {
+      this.canConnect.next(false);
+      return;
+    }
     this.http.get(this.backendUrl + '/api/key').subscribe((result: any) => {
       if (result) {
         this.canConnect.next(result.apiKeySet);

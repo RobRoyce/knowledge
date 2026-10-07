@@ -14,6 +14,8 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
+import { ManagedFiles } from '@app/platform/managed-files';
 import { BehaviorSubject } from 'rxjs';
 import { BrowserViewDialogService } from '@services/ipc-services/browser-view-dialog.service';
 import { Clipboard } from '@angular/cdk/clipboard';
@@ -50,7 +52,9 @@ export class KsCommandService {
     private confirmation: ConfirmationService,
     private clipboard: Clipboard,
     private notifications: NotificationsService,
-    private projects: ProjectService
+    private projects: ProjectService,
+    private managedFiles: ManagedFiles,
+    private platform: Platform
   ) {}
 
   update(ksList: KnowledgeSource[], notify = true) {
@@ -123,8 +127,12 @@ export class KsCommandService {
 
   open(ks: Partial<KnowledgeSource>) {
     if (ks.ingestType === 'file' && ks.assetId) {
-      this.ipc
-        .openAsset(ks.assetId)
+      // Desktop: default app. Browser: a new tab.
+      this.managedFiles
+        .open(
+          ks.assetId,
+          ks.reference?.source?.file?.filename ?? ks.title ?? 'file'
+        )
         .then(() =>
           this.notifications.success(
             'Source Command',
@@ -132,7 +140,7 @@ export class KsCommandService {
             ks.title ?? ''
           )
         )
-        .catch((e) =>
+        .catch((e: unknown) =>
           this.notifications.error(
             'Source Command',
             'Unable to Open File',
@@ -207,6 +215,11 @@ export class KsCommandService {
 
   showInFiles(ks: KnowledgeSource) {
     if (typeof ks.accessLink !== 'string') {
+      return;
+    }
+    // Browser: no access to local folders. Open the managed file instead.
+    if (!this.platform.has('showInFolder')) {
+      this.open(ks);
       return;
     }
     this.ipc.showItemInFolder(ks.accessLink);

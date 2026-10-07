@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-import type { AssetRecord } from '@contracts/storage';
+import { isDesktop } from '@app/platform/platform';
 import { Injectable, NgZone } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {
@@ -36,10 +36,11 @@ export class ElectronIpcService {
     browserViewExtractText: 'E2A:BrowserView:ExtractedText',
   };
   private ClassName = 'ElectronIpcService';
-  private send = window.api.send;
-  private receive = window.api.receive;
-  private receiveOnce = window.api.receiveOnce;
-  private removeAllListeners = window.api.removeAllListeners;
+  private send = window.api?.send ?? (() => undefined);
+  private receive = window.api?.receive ?? (() => undefined);
+  private receiveOnce = window.api?.receiveOnce ?? (() => undefined);
+  private removeAllListeners =
+    window.api?.removeAllListeners ?? (() => undefined);
   private channels = {
     autoUpdateReceive: 'E2A:AutoUpdate:Update',
     browserView: 'A2E:BrowserView:Open',
@@ -111,6 +112,11 @@ export class ElectronIpcService {
   extractedText = this._extractedText.asObservable();
 
   constructor(private zone: NgZone) {
+    // Desktop only. In a browser there is no Electron bridge.
+    if (!isDesktop()) {
+      return;
+    }
+
     /**
      * Listen for auto update messages
      */
@@ -346,19 +352,6 @@ export class ElectronIpcService {
       );
       this.send(this.channels.openLocalFile, path);
     });
-  }
-
-  /**
-   * Copy a local file into the storage service. Desktop only: the renderer
-   * cannot read local paths. The original file is not changed.
-   */
-  importFile(path: string, mediaType?: string): Promise<AssetRecord> {
-    return window.api.invoke('A2E:Storage:ImportFile', { path, mediaType });
-  }
-
-  /** Open a managed file in its default application. Desktop only. */
-  openAsset(assetId: string): Promise<boolean> {
-    return window.api.invoke('A2E:Storage:OpenAsset', assetId);
   }
 
   generateUuid(quantity: number): Promise<UUID[]> {

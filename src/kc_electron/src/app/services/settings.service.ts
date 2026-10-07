@@ -17,28 +17,15 @@
 import * as fs from "fs";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
-  AutoscanSettingsModel,
-  CalendarSettingsModel,
-  ChatSettingsModel,
-  DockerSettingsModel,
+  createDefaultSettings,
   EnvironmentSettingsModel,
-  ExtensionServerSettingsModel,
-  FileManagerSettingsModel,
-  GraphSettingsModel,
-  GridSettingsModel,
-  LoggingSettingsModel,
-  ProjectSettingsModel,
-  SearchSettingsModel,
   SettingsModel,
   SystemSettingsModel,
-  TableSettingsModel,
-  UserSettingsModel,
 } from "../../../../kc_shared/models/settings.model";
 import * as dotenv from "dotenv";
 import path from "path";
 import os from "os";
 import * as lodash from "lodash";
-import { KcTheme } from "../../../../kc_shared/models/style.model";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { profile, resourcesDir } from "../profile";
 
@@ -209,36 +196,13 @@ class SettingsService {
   defaults(envPath: string): SettingsModel {
     const env = SettingsService.getEnvironment(envPath);
     const system: SystemSettingsModel = this.system(envPath);
-    return {
-      env: env,
-      system: system,
-      app: {
-        table: new TableSettingsModel(),
-        grid: new GridSettingsModel(),
-        calendar: new CalendarSettingsModel(),
-        projects: new ProjectSettingsModel(),
-        graph: new GraphSettingsModel(),
-        chat: new ChatSettingsModel(),
-      },
-      display: {
-        theme: new KcTheme(),
-        syncTheme: true,
-        logging: new LoggingSettingsModel(),
-        zoom: 100,
-        autoplay: true,
-        animations: true,
-      },
-      docker: new DockerSettingsModel(),
-      ingest: {
-        manager: new FileManagerSettingsModel(path.resolve(system.appPath)),
-        extensions: new ExtensionServerSettingsModel(__dirname),
-        autoscan: new AutoscanSettingsModel(
-          path.resolve(system.downloadPath, "Knowledge")
-        ),
-      },
-      search: new SearchSettingsModel(),
-      user: new UserSettingsModel(),
-    };
+    return createDefaultSettings({
+      env,
+      system,
+      storagePath: path.resolve(system.appPath),
+      extensionsPath: __dirname,
+      autoscanPath: path.resolve(system.downloadPath, "Knowledge"),
+    });
   }
 
   error(summary: string, description: string) {

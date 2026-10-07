@@ -7,12 +7,11 @@ milestones. Not started.
 
 | Item | Reason |
 | --- | --- |
-| Orphan asset cleanup policy | Deleting a source keeps its managed file. Only files without records after a rollback, crash, or failed restore are removed. |
+| Orphan asset cleanup policy | Deleting a source keeps its managed file. Files are uploaded when selected, so a file removed from the inbox also leaves a managed file. Only files without records after a rollback, crash, or failed restore are removed. |
 | Restore into a library that has records (merge or replace) | Restore refuses a non-empty library now. |
 | Move the extracted-text cache into the service | The chat server keeps it in `data/storage/sources/`, outside the library. |
 | Thumbnails in the service | Electron makes thumbnails from a local copy of the managed file. |
 | Move favicon cache, inbox, and chat history out of local storage | They stay in the renderer for this milestone. |
-| Remove `kc_shared` dependency on Angular models | `kc_shared/models/project.model.ts` imports an Angular model. Electron needs the `@shared` alias because of it. |
 | Stronger local access control | The token stops requests without it. Programs that run as the same OS user can read it. |
 
 ## Packaging and release
@@ -35,8 +34,17 @@ milestones. Not started.
 | Replace the fixed API key passphrase | The key file is obfuscated, not encrypted. |
 | Root `postinstall` key is outside `scripts` | It never runs. Remove it or move it. |
 | Fresh-profile route error (`inbox/undefined`) | Cosmetic error in the log on first start. |
-| PDF viewer title shows the blob ID | Managed PDFs open from a `blob:` URL. |
+| Desktop PDF viewer title shows the blob ID | The desktop shows managed PDFs from a `blob:` URL. The browser client shows the filename. |
 | Select a project after a library restore | After restore, no project is selected. The user selects one in the tree. |
+
+## Browser client
+
+| Item | Reason |
+| --- | --- |
+| Save websites in the browser | Needs website fetching and extraction in the backend. |
+| Chat in the browser | Needs the chat server in the backend. |
+| Browser settings and inbox | Kept in browser local storage, separate from the desktop. |
+| Other browsers | Only Google Chrome is tested. |
 
 ## Features (separate tasks)
 

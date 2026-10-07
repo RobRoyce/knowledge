@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { UUID } from '@shared/models/uuid.model';
@@ -84,10 +85,12 @@ export class SidebarService {
 
   items$ = this.items.asObservable();
 
-  constructor() {}
+  constructor(private platform: Platform) {}
 
   all(projectId: UUID) {
-    const items = SIDEBAR_ITEMS.map((i) => {
+    const items = SIDEBAR_ITEMS.filter(
+      (i) => i.label !== 'Chat' || this.platform.has('chat')
+    ).map((i) => {
       i.routerLink[2] = projectId.value;
       return i;
     });

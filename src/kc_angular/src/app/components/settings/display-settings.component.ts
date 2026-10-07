@@ -165,8 +165,8 @@ export class DisplaySettingsComponent {
     { name: 'Debug', value: 'debug' },
   ];
   form: FormGroup;
-  private send = window.api.send;
-  private receive = window.api.receive;
+  private send = window.api?.send ?? (() => undefined);
+  private receive = window.api?.receive ?? (() => undefined);
   private channels = {
     zoomIn: 'A2E:Window:ZoomIn',
     zoomOut: 'A2E:Window:ZoomOut',

@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { WindowControls } from '@app/platform/window-controls';
 import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
 import { ChildrenOutletContexts, NavigationEnd, Router } from '@angular/router';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
@@ -141,6 +142,7 @@ export class AppComponent implements OnInit {
     private factory: KsFactoryService,
     private projects: ProjectService,
     private ipc: ElectronIpcService,
+    public windowControls: WindowControls,
     private ingest: IngestService,
     private pCommand: ProjectCommandService,
     private router: Router,
@@ -363,12 +365,12 @@ export class AppComponent implements OnInit {
 
   /* When the user clicks the minimize button, send a message to the main process to minimize the window */
   minimize() {
-    window.api.send('A2E:Window:Minimize');
+    this.windowControls.minimize();
   }
 
   /* When the user clicks the maximize button, send a message to the main process to maximize the window */
   maximize() {
-    window.api.send('A2E:Window:Maximize');
+    this.windowControls.maximize();
   }
 
   /**

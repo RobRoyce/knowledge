@@ -21,9 +21,7 @@ import {
   OnInit,
   ViewChild,
 } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
-import { StorageService } from '@services/ipc-services/storage.service';
+import { ManagedFiles } from '@app/platform/managed-files';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 
@@ -64,11 +62,13 @@ export class SourceDocumentComponent implements OnInit, OnDestroy {
 
   safeUrl: SafeUrl | undefined;
 
-  style = {
+  style: { [key: string]: string } = {
     width: '100%',
     height: '100%',
     'max-width': '100%',
     'max-height': '100%',
+    // Plain text has no background of its own
+    'background-color': 'white',
   };
 
   styles = {
@@ -81,30 +81,29 @@ export class SourceDocumentComponent implements OnInit, OnDestroy {
   @ViewChild('documentContainer', { static: true })
   documentContainer!: ElementRef<HTMLDivElement>;
 
-  private objectUrl?: string;
+  private viewUrl?: string;
 
   constructor(
     private sanitizer: DomSanitizer,
-    private http: HttpClient,
-    private storage: StorageService
+    private managedFiles: ManagedFiles
   ) {}
 
   ngOnDestroy() {
-    if (this.objectUrl) {
-      URL.revokeObjectURL(this.objectUrl);
+    if (this.viewUrl) {
+      this.managedFiles.release(this.viewUrl);
     }
   }
 
   /** Managed files come from the storage service. Others use the file path. */
   private async documentUrl(): Promise<string> {
     if (this.source.assetId) {
-      const blob = await firstValueFrom(
-        this.http.get(this.storage.assetContentUrl(this.source.assetId), {
-          responseType: 'blob',
-        })
+      const filename =
+        this.source.reference?.source?.file?.filename ?? this.source.title;
+      this.viewUrl = await this.managedFiles.viewUrl(
+        this.source.assetId,
+        filename
       );
-      this.objectUrl = URL.createObjectURL(blob);
-      return this.objectUrl;
+      return this.viewUrl;
     }
     return 'file://' + encodeURI(this.source.accessLink as string);
   }

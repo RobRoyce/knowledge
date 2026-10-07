@@ -94,6 +94,17 @@ test(
       assert.equal(byTitle[SITE_TITLE].assetId, null);
       assert.ok(byTitle["recovery-fixture.pdf"].assetId);
       assert.ok(byTitle["recovery-note.txt"].assetId);
+
+      // The desktop sends the original path as metadata (from the selected File)
+      const pdfAssetMeta = await ctx.page.evaluate(async (id) => {
+        const { storage } = await window.api.invoke("A2E:Backend:Info");
+        const res = await fetch(`${storage.url}/v1/assets/${id}`, {
+          headers: { Authorization: `Bearer ${storage.token}` },
+        });
+        return (await res.json()).asset;
+      }, byTitle["recovery-fixture.pdf"].assetId);
+      assert.equal(pdfAssetMeta.originalPath, pdf);
+      assert.equal(pdfAssetMeta.filename, "recovery-fixture.pdf");
       assert.deepEqual(byTitle["recovery-note.txt"].topics, ["recoverytopic"]);
       assert.deepEqual(byTitle["recovery-note.txt"].annotations, [
         "mentions chlorophyll",

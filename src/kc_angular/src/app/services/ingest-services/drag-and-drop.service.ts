@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { isDesktop } from '@app/platform/platform';
 import { Injectable } from '@angular/core';
 import { KnowledgeSourceFactoryRequest } from '@services/factory-services/ks-factory.service';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
@@ -118,6 +119,10 @@ export class DragAndDropService {
     {
       HANDLER_TYPE: 'Web Links',
       accepts: (data: DragAndDropPacket) => {
+        // Saving websites needs the desktop app
+        if (!isDesktop()) {
+          return false;
+        }
         const text = data.text,
           uri = data.uri;
         if (!text || !text.length || !uri || !uri.length) {
@@ -181,7 +186,9 @@ export class DragAndDropService {
   ) {}
 
   get supportedTypes() {
-    return this.__data_transfer_handlers.map((dth) => dth.HANDLER_TYPE);
+    return this.__data_transfer_handlers
+      .map((dth) => dth.HANDLER_TYPE)
+      .filter((type) => isDesktop() || type !== 'Web Links');
   }
 
   async parseDragEvent(
@@ -259,7 +266,8 @@ export class DragAndDropService {
     $event.preventDefault();
     $event.stopPropagation();
 
-    if (ks && ks.ingestType === 'file') {
+    // Dragging a file out to the operating system is a desktop feature
+    if (ks && ks.ingestType === 'file' && isDesktop()) {
       this.pending =
         typeof ks.accessLink === 'string' ? ks.accessLink : ks.accessLink?.href;
       this.pending = this.pending?.split('\\').pop()?.split('/').pop();

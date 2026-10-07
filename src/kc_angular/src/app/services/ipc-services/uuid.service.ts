@@ -15,7 +15,6 @@
  */
 
 import { Injectable } from '@angular/core';
-import { ElectronIpcService } from './electron-ipc.service';
 import { UUID } from '@shared/models/uuid.model';
 
 declare global {
@@ -24,33 +23,18 @@ declare global {
   }
 }
 
+/** Random v4 UUIDs from the Web Crypto API. Same on desktop and browser. */
 @Injectable({
   providedIn: 'root',
 })
 export class UuidService {
-  private uuidBuffer: UUID[] = [];
-
-  constructor(private ipcService: ElectronIpcService) {
-    this.asyncGenerate();
-  }
-
   generate(quantity: number): UUID[] {
     if (quantity < 1) {
       console.error('Requested less than 1 UUID.. which is invalid...');
       return [];
     }
-
-    const uuids: UUID[] = this.uuidBuffer.slice(0, quantity);
-    this.uuidBuffer = this.uuidBuffer.slice(quantity);
-    if (this.uuidBuffer.length <= 32) {
-      this.asyncGenerate();
-    }
-    return uuids;
-  }
-
-  private asyncGenerate() {
-    this.ipcService.generateUuid(128).then((ids: UUID[]) => {
-      if (ids) this.uuidBuffer = ids;
-    });
+    return Array.from({ length: quantity }, () => ({
+      value: crypto.randomUUID(),
+    }));
   }
 }
