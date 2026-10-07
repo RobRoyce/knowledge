@@ -39,8 +39,10 @@ import {
   sourceToRecord,
 } from '@contracts/mapping';
 import type {
+  LibraryStatus,
   ProjectList,
   ProjectRecord,
+  RestorePreview,
   SourceList,
   SourceRecord,
 } from '@contracts/storage';
@@ -262,6 +264,40 @@ export class StorageService {
     const date = new Date().toISOString().slice(0, 10);
     this.download(blob, `knowledge-library-${date}.tar`);
     return blob.size;
+  }
+
+  libraryStatus(): Promise<LibraryStatus> {
+    return firstValueFrom(this.http.get<LibraryStatus>(`${this.api}/library`));
+  }
+
+  /**
+   * Upload a library backup. The service validates it and keeps it staged.
+   * Nothing becomes active until activateRestore().
+   */
+  async stageRestore(file: Blob): Promise<RestorePreview> {
+    const { restore } = await firstValueFrom(
+      this.http.post<{ restore: RestorePreview }>(
+        `${this.api}/restores`,
+        file,
+        {
+          headers: { 'Content-Type': 'application/x-tar' },
+        }
+      )
+    );
+    return restore;
+  }
+
+  async activateRestore(id: string) {
+    const { restored } = await firstValueFrom(
+      this.http.post<{
+        restored: { projects: number; sources: number; assets: number };
+      }>(`${this.api}/restores/${id}/activate`, null)
+    );
+    return restored;
+  }
+
+  async cancelRestore(id: string) {
+    await firstValueFrom(this.http.delete(`${this.api}/restores/${id}`));
   }
 
   /**

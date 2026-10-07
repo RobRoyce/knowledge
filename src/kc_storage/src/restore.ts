@@ -79,9 +79,14 @@ function fail(message: string): never {
 export function assertEmpty(dir: DataDir) {
   const counts = dir.library.counts();
   if (counts.projects + counts.sources + counts.assets > 0) {
+    const n = (count: number, noun: string) =>
+      `${count} ${noun}${count === 1 ? "" : "s"}`;
     throw conflict(
-      `Restore needs an empty library. This library has ${counts.projects} projects, ` +
-        `${counts.sources} sources, and ${counts.assets} files. ` +
+      `Restore needs an empty library. This library has ${n(
+        counts.projects,
+        "project"
+      )}, ` +
+        `${n(counts.sources, "source")}, and ${n(counts.assets, "file")}. ` +
         "Restore into a new profile instead. Existing data is not changed."
     );
   }
