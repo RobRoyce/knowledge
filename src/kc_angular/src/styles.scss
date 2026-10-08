@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 
 * {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 html, body {
@@ -79,6 +79,9 @@ app-ks-ingest {
     min-width: min(100%, 20rem);
     height: 100%;
     flex-basis: 20%;
+    border-right-width: 1px !important;
+    border-right-style: solid;
+    border-color: var(--surface-border) !important;
   }
 
   .app-splitter-divider {
@@ -155,6 +158,44 @@ app-ks-ingest {
   font-size: 0.875rem;
   font-weight: 500;
   margin: 0.5rem 0;
+}
+
+.user-message {
+  background-color: var(--primary-color) !important;
+  color: var(--primary-color-text) !important;
+  border-radius: 10px;
+  padding: 0 10px 0 10px;
+  margin: 0.5rem;
+  text-align: right;
+  max-width: min(80rem, 100%);
+}
+
+.agent-message {
+  color: var(--primary-color) !important;
+  background-color: var(--primary-color-text) !important;
+  border-radius: 10px;
+  padding: 0 10px 0 10px;
+  margin: 1.5rem;
+  text-align: left;
+  max-width: min(110rem, 100%);
+}
+
+.next-question-suggestion:hover {
+  opacity: 1 !important;
+}
+
+.html2canvas-container {
+  width: 3000px !important;
+  height: 3000px !important;
+}
+
+.chat-history-active {
+  // If the command bar is active, make the chat history slightly opaque and transparent
+  opacity: 0.5;
+  background-color: var(--surface-ground);
+
+  // Make it blurry
+  filter: blur(5px);
 }
 
 .topic-markdown {
@@ -397,7 +438,6 @@ source-chat, source-details, source-document, source-metadata, source-timeline, 
   height: 100% !important;
   width: 100% !important;
   overflow: auto !important;
-  padding: 1.5rem !important;
   max-height: 100% !important;
   @include styleclass('surface-hover fadein');
 }
@@ -406,7 +446,7 @@ source-chat, source-details, source-document, source-metadata, source-timeline, 
   @include styleclass('w-full flex flex-wrap p-2 max-h-full');
 
   .source-header-div {
-    @include styleclass('col-12 lg:col-6 flex flex-column max-h-full');
+    @include styleclass('flex flex-column max-h-full w-full');
 
     .source-thumbnail {
       @include styleclass('w-full flex flex-column flex-auto');
@@ -438,29 +478,15 @@ source-chat, source-details, source-document, source-metadata, source-timeline, 
 }
 
 .source-model {
-  @include styleclass('w-full flex col-12 flex-wrap p-2 flex-column');
+  @include styleclass('w-full flex col-12 flex-wrap flex-column');
 }
 
 .source-youtube-player {
   @include styleclass('w-full h-full');
 }
 
-.source-metadata {
-  @media (min-width: 0px) and (max-width: 999px) {
-    max-width: min(45vw, 70rem) !important;
-  }
-
-  @media (min-width: 1000px) and (max-width: 1199px) {
-    max-width: min(50vw, 80rem) !important;
-  }
-
-  @media (min-width: 1200px) and (max-width: 1599px) {
-    max-width: min(45vw, 70rem) !important;
-  }
-
-  @media (min-width: 1600px) {
-    max-width: min(60vw, 1000rem) !important;
-  }
+.source-metadata, .source-notes {
+  @include styleclass('w-full flex flex-wrap p-2 max-h-full');
 }
 
 .title-bar {

@@ -241,19 +241,19 @@ export class FileManagerSettingsModel {
 }
 
 export class ChatSettingsModel {
-  suggestions: {
-    enabled: boolean;
-    onInput: boolean;
+  suggestions?: {
+    enabled?: boolean;
+    onInput?: boolean;
   } = {
-    enabled: true,
-    onInput: true,
+    enabled: false,
+    onInput: false,
   };
 
-  display: {
-    introductions: boolean;
-    sourceMessages: boolean;
+  display?: {
+    introductions?: boolean;
+    sourceMessages?: boolean;
   } = {
-    introductions: true,
+    introductions: false,
     sourceMessages: true,
   };
 

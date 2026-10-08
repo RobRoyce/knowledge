@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import { NotificationsService } from '@services/user-services/notifications.serv
     <div class="p-fluid grid">
       <form [formGroup]="form" class="w-full h-full">
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Import/Export</div>

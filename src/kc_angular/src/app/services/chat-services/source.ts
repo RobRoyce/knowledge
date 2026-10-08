@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -119,60 +119,6 @@ export class SourceChat {
       });
     }
 
-    return this.chat.send(prompts);
-  }
-
-  intro(source: KnowledgeSource) {
-    const system = this.prompts.introPrompts(source, 'Source');
-    const prompts = this.getSourcePrompts(source);
-    prompts.forEach((prompt) => system.push(prompt));
-    system.push({
-      role: 'user',
-      content: `Can you introduce me to "${source.title}"?`,
-    });
-    this.notify.debug('Source Chat Service', 'Sending Intro Prompts', system);
-    return this.chat.intro(system, source);
-  }
-
-  async getText(source: KnowledgeSource) {
-    // First try to extract text from the source using htmlToText
-
-    if (source.ingestType === 'file') {
-      // Get text from file using Tika
-    } else {
-      // Get text from website using other libraries
-    }
-  }
-
-  /**
-   * Regenerate a specific message
-   * @param source The source to regenerate the message for
-   * @param message The message to regenerate
-   * @param history The history of the chat session
-   * @returns an Observable that will emit the regenerated message
-   */
-  regenerate(
-    source: KnowledgeSource,
-    message: ChatMessage,
-    history: ChatMessage[]
-  ) {
-    // Get standard source prompts
-    const prompts = this.getSourcePrompts(source);
-
-    // Get the history of the chat before the message to be regenerated
-    const slice = this.chat.getHistory(message, history, false, true);
-
-    // Convert to OpenAI format and add to prompts
-    this.chat
-      .convertToOpenAI(slice)
-      .forEach((message) => prompts.push(message));
-
-    // Send chat history
-    this.notify.debug(
-      'Source Chat Service',
-      'Sending Regenerate Prompts',
-      prompts
-    );
-    return this.chat.send(prompts);
+    return this.chat.sendChat(prompts);
   }
 }

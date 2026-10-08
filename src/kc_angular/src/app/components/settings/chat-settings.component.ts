@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,79 +30,10 @@ import { ChatModel, SupportedChatModels } from '@shared/models/chat.model';
     <div class="p-fluid grid">
       <form [formGroup]="form" class="w-full h-full">
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Chat Settings</div>
-              </div>
-            </ng-template>
-            <ng-template pTemplate="content">
-              <div class="w-full h-full flex flex-column">
-                <app-setting-template
-                  class="w-full"
-                  label="Automatic Introductions"
-                  labelHelp="Enable or disable automatic introductions when a Source has no chat history."
-                  labelSubtext="{{
-                    form.controls.introductions.value | switchLabel
-                  }}"
-                >
-                  <p-inputSwitch
-                    class="settings-input"
-                    formControlName="introductions"
-                  ></p-inputSwitch>
-                </app-setting-template>
-
-                <app-setting-template
-                  class="w-full"
-                  label="Next Question Suggestions"
-                  labelHelp="Enable or disable automatically generating suggestions for the next question to ask."
-                  labelSubtext="{{
-                    form.controls.suggestionsEnabled.value | switchLabel
-                  }}"
-                >
-                  <p-inputSwitch
-                    class="settings-input"
-                    formControlName="suggestionsEnabled"
-                  ></p-inputSwitch>
-                </app-setting-template>
-
-                <app-setting-template
-                  class="w-full"
-                  label="Next Question on Input"
-                  labelHelp="When enabled, generate new question suggestions when you click on the chat text input."
-                  labelSubtext="{{
-                    form.controls.suggestionsOnInput.value | switchLabel
-                  }}"
-                >
-                  <p-inputSwitch
-                    class="settings-input"
-                    formControlName="suggestionsOnInput"
-                  ></p-inputSwitch>
-                </app-setting-template>
-
-                <app-setting-template
-                  class="w-full"
-                  label="Show Source messages in Project chat"
-                  labelHelp="Enable or disable showing messages from Sources in the Project chat."
-                  labelSubtext="{{
-                    form.controls.sourceMessages.value | switchLabel
-                  }}"
-                >
-                  <p-inputSwitch
-                    class="settings-input"
-                    formControlName="sourceMessages"
-                  ></p-inputSwitch>
-                </app-setting-template>
-              </div>
-            </ng-template>
-          </p-panel>
-        </div>
-
-        <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
-            <ng-template pTemplate="header">
-              <div class="flex-row-center-between w-full">
-                <div class="text-2xl">OpenAI API</div>
+                <div class="text-2xl">Model</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">
@@ -287,10 +218,6 @@ export class ChatSettingsComponent {
     this.canChat = this.chat.canChat();
 
     this.form = this.formBuilder.group({
-      suggestionsEnabled: [this.chatSettings.suggestions.enabled],
-      suggestionsOnInput: [this.chatSettings.suggestions.onInput],
-      introductions: [this.chatSettings.display.introductions],
-      sourceMessages: [this.chatSettings.display.sourceMessages],
       modelName: [this.chatSettings.model.name],
       temperature: [this.chatSettings.model.temperature],
       top_p: [this.chatSettings.model.top_p],
@@ -298,7 +225,6 @@ export class ChatSettingsComponent {
       presence_penalty: [this.chatSettings.model.presence_penalty],
       frequency_penalty: [this.chatSettings.model.frequency_penalty],
     });
-    this.disable();
 
     this.form.valueChanges
       .pipe(
@@ -334,14 +260,7 @@ export class ChatSettingsComponent {
           model.frequency_penalty = formValue.frequency_penalty;
 
           const chatSettings: ChatSettingsModel = {
-            display: {
-              introductions: formValue.introductions,
-              sourceMessages: formValue.sourceMessages,
-            },
-            suggestions: {
-              enabled: formValue.suggestionsEnabled,
-              onInput: formValue.suggestionsOnInput,
-            },
+            suggestions: { enabled: false, onInput: false },
             model: model,
           };
 
@@ -350,7 +269,6 @@ export class ChatSettingsComponent {
           }
 
           this.chatSettings = chatSettings;
-          this.disable();
           this.set();
 
           setTimeout(() => {
@@ -424,12 +342,6 @@ export class ChatSettingsComponent {
 
   private checkChanges(prev: any, curr: any) {
     return JSON.stringify(prev) === JSON.stringify(curr);
-  }
-
-  private disable() {
-    this.chatSettings.suggestions.enabled
-      ? this.form.get('suggestionsOnInput')?.enable()
-      : this.form.get('suggestionsOnInput')?.disable();
   }
 
   private set() {

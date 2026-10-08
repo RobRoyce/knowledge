@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import { KnowledgeSource } from '@app/models/knowledge.source.model';
   template: `
     <div
       *ngIf="ks; else placeholder"
-      class="flex-col-center-between w-full h-full border-bottom-1 border-100 hover:surface-hover p-2 border-round-2xl"
+      class="flex-col-center-between w-full h-full border-bottom-1 border-100 hover:surface-hover p-2"
       [class.text-primary]="active"
       [class.surface-card]="active"
     >

@@ -16,27 +16,14 @@
 
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
-import { AgentType, ChatMessage } from '@app/models/chat.model';
 import { ChatService } from '@services/chat-services/chat.service';
-import { SourceChat } from '@services/chat-services/source';
-import { finalize, take, tap } from 'rxjs/operators';
 import { ChatViewComponent } from '@components/chat-components/chat.view.component';
-import { NotificationsService } from '@services/user-services/notifications.service';
-import { BehaviorSubject } from 'rxjs';
 
 @Component({
   selector: 'source-chat',
   template: `
     <div class="h-full w-full flex flex-column">
-      <app-chat-view
-        #chatView
-        [history]="history"
-        [loading]="(loading$ | async)!"
-        (submit)="submit($event)"
-        (regenerate)="regenerate($event)"
-        (delete)="delete($event)"
-        style="height: 100% !important;"
-      ></app-chat-view>
+      <app-chat-view #chatView style="height: 100% !important;"></app-chat-view>
     </div>
     <p-dialog [(visible)]="showQuestion" [modal]="true" header="Source Q&A">
       <div *ngIf="context">
@@ -55,7 +42,6 @@ import { BehaviorSubject } from 'rxjs';
           pInputText
           class="w-full p-fluid"
           placeholder="Type your question here, then press enter..."
-          (keydown.enter)="ask(question.value)"
         />
       </div>
     </p-dialog>
@@ -67,157 +53,18 @@ export class SourceChatComponent implements OnInit {
 
   source!: KnowledgeSource; // Must be passed in during dynamic component creation
 
-  history: ChatMessage[] = [];
-
-  private _loading = new BehaviorSubject<boolean>(false);
-  loading$ = this._loading.asObservable();
-
   showQuestion = false;
 
   context?: string;
 
-  constructor(
-    private chat: ChatService,
-    private sourceChat: SourceChat,
-    private notify: NotificationsService
-  ) {}
+  constructor(private chat: ChatService) {}
 
   ngOnInit() {
-    // Check if the source is a supported file type (PDF or other plain-text)
-    const supportedFileTypes = [
-      '.pdf',
-      '.txt',
-      '.md',
-      '.html',
-      '.htm',
-      '.py',
-      '.js',
-      '.ts',
-      '.java',
-      '.c',
-      '.cpp',
-      '.h',
-      '.hpp',
-      '.cs',
-      '.go',
-      '.rs',
-      '.sh',
-    ];
-
-    // Check if the file is supported
-    if (
-      this.source.ingestType === 'file' &&
-      !supportedFileTypes.some((type) =>
-        this.source.accessLink.toString().endsWith(type)
-      )
-    ) {
-      this.notify.warn(
-        'Source Chat',
-        'File Chat',
-        'Knowledge does not know how to read this file type.  Chat features will be limited.',
-        'toast',
-        6000
-      );
-    }
-
-    // Load history
-    this.history = this.chat.loadChat(this.source.id, undefined, this.source);
-    if (this.history.length === 0) {
-      this._loading.next(true);
-      this.addMessage(
-        AgentType.User,
-        AgentType.Source,
-        `Can you introduce me to "${this.source.title}"?`
-      );
-
-      this.sourceChat
-        .intro(this.source)
-        .pipe(
-          take(1),
-          tap((response) => {
-            if (response.content) {
-              this.addMessage(
-                AgentType.Source,
-                AgentType.User,
-                response.content
-              );
-            }
-          }),
-          finalize(() => {
-            this._loading.next(false);
-          })
-        )
-        .subscribe();
-    }
+    this.chat.setTarget({ source: this.source });
   }
 
   showQuestionDialog(context?: string) {
     this.context = context;
     this.showQuestion = true;
-  }
-
-  addMessage(from: AgentType, to: AgentType, content: string) {
-    this.history.push(
-      this.chat.createMessage(from, to, content, undefined, this.source)
-    );
-    if (this.chatView) {
-      this.chatView.scroll();
-    }
-    this.chat.saveChat(this.history, this.source.id);
-  }
-
-  submit($event: string) {
-    this.addMessage(AgentType.User, AgentType.Source, $event);
-    this._loading.next(true);
-    this.sourceChat
-      .send(this.source, this.history, $event)
-      .pipe(
-        take(1),
-        tap((response) => {
-          if (response.content) {
-            this.addMessage(AgentType.Source, AgentType.User, response.content);
-          }
-        }),
-        finalize(() => {
-          this._loading.next(false);
-        })
-      )
-      .subscribe();
-  }
-
-  regenerate(message: ChatMessage) {
-    this._loading.next(true);
-    this.sourceChat
-      .regenerate(this.source, message, this.history)
-      .pipe(
-        tap((response) => {
-          this.history = this.history.map((m) => {
-            if (m.id === message.id) {
-              m.text = response.content ?? '';
-            }
-            return m;
-          });
-          this.chat.saveChat(this.history, this.source.id);
-        }),
-        finalize(() => {
-          this._loading.next(false);
-        })
-      )
-      .subscribe();
-  }
-
-  delete(messages: ChatMessage[]) {
-    for (const message of messages) {
-      this.history = this.history.filter((m) => m.id !== message.id);
-    }
-
-    this.chat.saveChat(this.history, this.source.id);
-  }
-
-  ask(value: string) {
-    this.showQuestion = false;
-    this.submit(
-      `Context: ${this.context}\n\n\nPlease answer the following question: ${value}`
-    );
   }
 }

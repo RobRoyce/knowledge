@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,11 @@ import { ProjectTreeNode } from '@app/models/project.tree.model';
 import { TreeNode } from 'primeng/api';
 import { constructTreeNodes } from '@app/workers/tree.worker';
 import { delay, take, takeUntil } from 'rxjs/operators';
+
+interface ProjectJSON {
+  name: string;
+  subprojects: ProjectJSON[];
+}
 
 @Injectable({
   providedIn: 'root',
@@ -125,6 +130,93 @@ export class ProjectTreeFactoryService implements OnDestroy {
       }
     }
     return undefined;
+  }
+
+  generateYAML(root: TreeNode, level: number): string {
+    //   Recursively generate YAML, using the following format:
+    //   - name: Project Name
+    //     subprojects:
+    //     - name: Subproject Name
+    //       subprojects:
+    //      - ...
+
+    let yaml = '';
+    const indent = '-'.repeat(level);
+    yaml += `${indent}${root.label}\n`;
+    if (root.children && root.children.length > 0) {
+      for (const child of root.children) {
+        yaml += this.generateYAML(child, level + 1);
+      }
+    }
+    return yaml;
+  }
+
+  generateJSON(root: TreeNode): string {
+    // Generate JSON in the following format:
+    // {
+    //   "name": "Project Name",
+    //   "subprojects": [
+    //     {
+    //       "name": "Subproject Name",
+    //       "subprojects": [...]
+    //     }
+    //   ]
+    // }
+
+    if (!root.label) {
+      return 'Invalid Project Name';
+    }
+
+    const json: ProjectJSON = {
+      name: root.label,
+      subprojects: [],
+    };
+    if (root.children && root.children.length > 0) {
+      for (const child of root.children) {
+        json.subprojects.push(JSON.parse(this.generateJSON(child)));
+      }
+    }
+
+    return JSON.stringify(json);
+  }
+
+  /**
+   * Generate a tree in the same format as the `tree` command in Unix.
+   * e.g.:
+   * Project Name
+   * ├── Subproject Name
+   * │   ├── Subsubproject Name
+   * │   └── Subsubproject Name
+   * └── Subproject Name
+   */
+  generateTree(
+    root: TreeNode,
+    level = 0,
+    isLastSubproject = false,
+    prefix = ''
+  ) {
+    let tree = '';
+    if (level > 0) {
+      tree += prefix + (isLastSubproject ? '└── ' : '├── ') + root.label + '\n';
+    } else {
+      tree += `<b>${root.label}</b>` + '\n';
+    }
+
+    if (root.children && root.children.length > 0) {
+      const newPrefix =
+        prefix + (level === 0 ? '    ' : isLastSubproject ? '    ' : '│   ');
+      root.children.forEach((child, index) => {
+        if (root.children) {
+          const isLastChild = index === root.children.length - 1;
+          tree += this.generateTree(child, level + 1, isLastChild, newPrefix);
+        }
+      });
+    }
+
+    if (level === 0) {
+      return '<code>\n' + tree + '</code>\n';
+    }
+    return tree;
   }
 
   private update(

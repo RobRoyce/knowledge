@@ -14,7 +14,14 @@
  *  limitations under the License.
  */
 
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  OnInit,
+  Output,
+  ViewChild,
+} from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -23,263 +30,262 @@ import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service'
 import { NotificationsService } from '@services/user-services/notifications.service';
 import { SearchService } from '@services/user-services/search.service';
 import { skip } from 'rxjs';
+import { Clipboard } from '@angular/cdk/clipboard';
 
 @Component({
   selector: 'source-details',
   template: `
-    <div class="w-full flex flex-column">
+    <div class="w-full flex">
       <div class="source-header">
         <div class="source-header-div">
-          <div class="source-thumbnail">
-            <app-ks-thumbnail [ks]="source" class="col-12"></app-ks-thumbnail>
-            <div class="source-actions">
-              <app-action-bar
-                (flag)="flag()"
-                (open)="open()"
-                (preview)="preview()"
-                (remove)="removeSource()"
-                [ks]="source"
-                [showEdit]="false"
-                [showPreview]="false"
-                [showFlag]="true"
-                [showChat]="false"
-                class="w-full p-fluid"
-              >
-              </app-action-bar>
-            </div>
+          <app-ks-card
+            [ks]="source"
+            [showEdit]="false"
+            [showPreview]="false"
+            [showFlag]="true"
+            [showChat]="false"
+            [showDescription]="false"
+            [showTopics]="false"
+            [allowDrag]="false"
+            (onRemove)="remove.emit(source)"
+            class="flex-grow-1"
+          ></app-ks-card>
+        </div>
+      </div>
+
+      <div class="source-header">
+        <div class="source-model pb-0 pt-2">
+          <div
+            class="p-fluid flex-column surface-ground text-color border-round-2xl p-4 grid gap-2 border-1 surface-border hover:shadow-1 flex-grow-1"
+          >
+            <form [formGroup]="form" class="flex-grow-1">
+              <div class="p-fluid grid h-full">
+                <div class="col-12">
+                  <label for="title">Title</label>
+                  <input
+                    formControlName="title"
+                    id="title"
+                    minlength="3"
+                    pInputText
+                    required
+                    type="text"
+                  />
+                </div>
+                <div class="col-12">
+                  <label for="topics">Topics</label>
+                  <p-chips
+                    (onChipClick)="topicSearch($event)"
+                    [addOnBlur]="true"
+                    [addOnTab]="true"
+                    [allowDuplicate]="false"
+                    inputId="topics"
+                    separator=","
+                    formControlName="topics"
+                    placeholder="Start typing to add a topic..."
+                  >
+                  </p-chips>
+                </div>
+                <div class="col-12">
+                  <label for="ksProject">Project</label>
+                  <input
+                    [value]="
+                      (source.associatedProject.value | projectName) || 'None'
+                    "
+                    id="ksProject"
+                    disabled
+                    pInputText
+                    type="text"
+                  />
+                </div>
+              </div>
+            </form>
           </div>
-          <div class="source-form">
-            <div class="col-12">
-              <form [formGroup]="form">
-                <div class="p-fluid grid h-full">
-                  <div class="col-12">
-                    <h3 class="font-bold text-2xl">Title</h3>
+        </div>
+      </div>
+    </div>
+
+    <div class="source-metadata">
+      <h3 class="text-2xl font-bold mt-4 ml-3">Metadata</h3>
+      <div
+        class="add-metadata bg-primary-reverse border-round-2xl flex-row-center-between w-full px-2 mb-4 text-color"
+      >
+        <div class="">
+          <button
+            pButton
+            pRipple
+            type="button"
+            icon="pi pi-plus"
+            (click)="addMeta(metaEntry)"
+            class="p-button-sm p-button-secondary"
+          ></button>
+        </div>
+        <div class="col-2">
+          <input
+            #tagInput
+            pInputText
+            type="text"
+            class="w-full bg-primary-reverse text-color"
+            placeholder="Tag"
+            [(ngModel)]="metaEntry.key"
+          />
+        </div>
+        <div class="col">
+          <input
+            pInputText
+            type="text"
+            placeholder="Value"
+            (keydown.enter)="addMeta(metaEntry)"
+            class="w-full bg-primary-reverse text-color"
+            [(ngModel)]="metaEntry.value"
+          />
+        </div>
+      </div>
+      <p-card class="w-full">
+        <div
+          *ngIf="source.meta.length === 0"
+          class="w-full text-xl flex-row-center-center"
+        >
+          Click the + button to add metadata...
+        </div>
+        <p-table
+          *ngIf="source.meta.length > 0"
+          [breakpoint]="'1200px'"
+          [resizableColumns]="true"
+          [value]="source.meta"
+          [paginator]="true"
+          [rows]="10"
+          editMode="row"
+          dataKey="id"
+          class="w-full pb-1"
+          tableStyleClass="w-full overflow-x-auto surface-ground"
+        >
+          <ng-template pTemplate="header">
+            <tr>
+              <th class="ks-info-table" pSortableColumn="key">
+                Tag
+                <p-sortIcon field="key"></p-sortIcon>
+              </th>
+              <th class="ks-info-table w-full" pSortableColumn="value">
+                Value
+                <p-sortIcon field="value"></p-sortIcon>
+              </th>
+              <th style="width:12rem" class="text-center"></th>
+            </tr>
+          </ng-template>
+          <ng-template
+            pTemplate="body"
+            let-meta
+            let-editing="editing"
+            let-ri="rowIndex"
+          >
+            <tr
+              [pEditableRow]="meta"
+              *ngIf="meta.key.length > 0 && meta.value.length > 0"
+            >
+              <td class="ks-info-table select-text">
+                <p-cellEditor>
+                  <ng-template pTemplate="input">
+                    <input pInputText type="text" [(ngModel)]="meta.key" />
+                  </ng-template>
+                  <ng-template pTemplate="output">
+                    {{ meta.key }}
+                  </ng-template>
+                </p-cellEditor>
+              </td>
+              <td
+                class="ks-info-table w-full select-text"
+                style="text-wrap: inherit; overflow-wrap: anywhere"
+              >
+                <p-cellEditor>
+                  <ng-template pTemplate="input">
                     <input
-                      formControlName="title"
-                      id="title"
-                      minlength="3"
                       pInputText
-                      required
+                      class="w-full"
                       type="text"
+                      [(ngModel)]="meta.value"
                     />
-                  </div>
-                  <div class="col-12">
-                    <h3 class="font-bold text-2xl">Topics</h3>
-                    <p-chips
-                      (onChipClick)="topicSearch($event)"
-                      [addOnBlur]="true"
-                      [addOnTab]="true"
-                      [allowDuplicate]="false"
-                      inputId="topics"
-                      separator=","
-                      formControlName="topics"
-                      placeholder="Start typing to add a topic..."
-                    >
-                    </p-chips>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div class="source-header-div">
-          <div class="source-description col-12">
-            <div
-              class="flex flex-row w-full"
-              proTip
-              tipHeader="Express Yourself with Notes"
-              tipMessage="Embrace your creativity using the Notes feature! It supports Markdown rendering, allowing you to craft visually engaging notes. Find something valuable in a source? Extract and save it directly to Notes by highlighting and right-clicking in the Browser tab. Make it your personal knowledge playground!"
-              [tipGroups]="['source', 'intro']"
-            >
-              <h3 class="font-bold text-2xl">Notes</h3>
-              <div class="flex justify-content-end align-items-center w-full">
-                <!-- Buttons to switch between markdown preview and editable form -->
-                <div class="align-items-center">
-                  <button
-                    (click)="showMarkdownPreview = true"
-                    [disabled]="showMarkdownPreview"
-                    class="p-button-sm p-button-rounded p-button-text"
-                    icon="pi pi-eye"
-                    pButton
-                  ></button>
-                  <button
-                    (click)="showMarkdownPreview = false"
-                    [disabled]="!showMarkdownPreview"
-                    class="p-button-sm p-button-rounded p-button-text"
-                    icon="pi pi-pencil"
-                    pButton
-                    pTooltip="Edit Markdown"
-                    tooltipPosition="left"
-                  ></button>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="flex flex-column flex-grow-1 w-full"
-              style="height: calc(100% - 5rem) !important;"
-            >
-              <div class="source-description-container">
+                  </ng-template>
+                  <ng-template pTemplate="output">
+                    <div>
+                      {{ meta.value }}
+                    </div>
+                  </ng-template>
+                </p-cellEditor>
+              </td>
+              <td class="ks-info-table">
                 <div
-                  *ngIf="showMarkdownPreview"
-                  [innerHTML]="
-                    source.description
-                      ? (source.description | markdown | sanitizeHtml)
-                      : ('Add a description, notes, or other information here using [Markdown](https://www.markdownguide.org/basic-syntax/) formatting.'
-                        | markdown
-                        | sanitizeHtml)
-                  "
-                  class="w-full h-full max-h-fit ks-description select-text overflow-y-auto"
-                  [class.text-500]="!source.description"
-                  [class.align-items-center]="!source.description"
-                  [class.justify-content-center]="!source.description"
-                  [class.flex]="!source.description"
-                ></div>
-                <form [formGroup]="form">
-                  <div>
-                    <textarea
-                      *ngIf="!showMarkdownPreview"
-                      class="w-full h-full max-h-fit ks-description"
-                      [rows]="24"
-                      formControlName="description"
-                      id="_ksDescription"
-                      pInputTextarea
-                      placeholder="Description"
-                    >
-                    </textarea>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="source-header">
-        <div class="col-12">
-          <div class="source-model">
-            <h3 class="font-bold text-2xl">Model</h3>
-            <div
-              class="p-fluid flex flex-wrap surface-section border-round-2xl p-2"
-            >
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.id.value"
-                  id="sourceId"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="sourceId">Source ID</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.associatedProject.value"
-                  id="ksProject"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="ksProject">Associated Project ID</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.ingestType | titlecase"
-                  id="ingestType"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="ingestType">Ingest Type</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.importMethod | importMethod"
-                  id="importMethod"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="importMethod">Import Method</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.icon"
-                  id="sourceIcon"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="sourceIcon">Icon Encoding</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4"
-              >
-                <input
-                  [value]="source.iconUrl"
-                  id="iconUrl"
-                  disabled
-                  pInputText
-                  type="text"
-                />
-                <label for="iconUrl">Icon URL</label>
-              </div>
-
-              <div
-                class="field p-float-label sm:col-12 md:col-12 lg:col-6 mt-4 p-fluid p-inputgroup"
-              >
-                <input
-                  [value]="source.accessLink"
-                  id="accessLink"
-                  disabled
-                  pInputText
-                  style="width: calc(100% - 6rem)"
-                  type="text"
-                />
-                <label for="accessLink">Access Link</label>
-                <button
-                  (click)="show(source.accessLink)"
-                  label="Show"
-                  pButton
-                  style="width: 6rem"
-                ></button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+                  class="flex align-items-center justify-content-center gap-2"
+                >
+                  <button
+                    *ngIf="!editing && !meta.key.startsWith('knowledge:')"
+                    pButton
+                    type="button"
+                    pInitEditableRow
+                    icon="pi pi-pencil"
+                    (click)="onRowEditInit(meta, ri)"
+                    class="p-button-rounded p-button-text opacity-50 hover:opacity-100"
+                  ></button>
+                  <button
+                    *ngIf="!editing && !meta.key.startsWith('knowledge:')"
+                    pButton
+                    type="button"
+                    icon="pi pi-trash"
+                    (click)="onRowDelete(meta, ri)"
+                    class="p-button-rounded p-button-text p-button-danger opacity-50 hover:opacity-100"
+                  ></button>
+                  <div
+                    *ngIf="!editing && meta.key.startsWith('knowledge:')"
+                    class="p-button pi pi-info opacity-0 cursor-auto"
+                    disabled
+                  ></div>
+                  <button
+                    *ngIf="editing"
+                    pButton
+                    type="button"
+                    pSaveEditableRow
+                    icon="pi pi-check"
+                    (click)="onRowEditSave(meta, ri)"
+                    class="p-button-rounded p-button-text p-button-success mr-2"
+                  ></button>
+                  <button
+                    *ngIf="editing"
+                    pButton
+                    pRipple
+                    type="button"
+                    pCancelEditableRow
+                    icon="pi pi-times"
+                    (click)="onRowEditCancel(meta, ri)"
+                    class="p-button-rounded p-button-text p-button-danger"
+                  ></button>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
     </div>
   `,
   styleUrls: ['./source.styles.scss'],
 })
 export class SourceDetailsComponent implements OnInit {
+  @ViewChild('tagInput') tagInput!: ElementRef;
+
+  @Output() remove = new EventEmitter<KnowledgeSource>();
+
+  @Output() update = new EventEmitter<KnowledgeSource>();
+
   source!: KnowledgeSource;
 
   form: FormGroup;
 
   showMarkdownPreview = true;
 
-  @Output() remove = new EventEmitter<KnowledgeSource>();
+  metaUpdates: { [id: number]: { key: string; value: string } } = {};
 
-  @Output() update = new EventEmitter<KnowledgeSource>();
+  metaEntry: { key: string; value: string } = { key: '', value: '' };
 
   constructor(
+    private clipboard: Clipboard,
     private fb: FormBuilder,
     private command: KsCommandService,
     private ipc: ElectronIpcService,
@@ -310,6 +316,52 @@ export class SourceDetailsComponent implements OnInit {
 
   ngOnInit() {
     this.form.patchValue(this.source);
+
+    if (!this.source.meta) {
+      this.source.meta = [];
+    }
+
+    if (this.source.reference.source.website?.metadata?.meta) {
+      for (const m of this.source.reference.source.website.metadata.meta) {
+        // Add to source.meta if it doesn't exist
+        if (!this.source.meta.find((meta) => meta.key === m.key)) {
+          if (m.key && m.value) {
+            this.source.meta.push({ key: m.key, value: m.value });
+          }
+        }
+      }
+      delete this.source.reference.source.website.metadata.meta;
+    }
+
+    this.source.meta = [
+      { key: 'knowledge:id', value: this.source.id.value },
+      {
+        key: 'knowledge:method',
+        value: this.source.importMethod ?? 'manual',
+      },
+      {
+        key: 'knowledge:link',
+        value: this.source.accessLink.toString(),
+      },
+      {
+        key: 'knowledge:type',
+        value: this.source.ingestType,
+      },
+      ...this.source.meta,
+    ];
+
+    // Remove any duplicates
+    this.source.meta = this.source.meta.filter(
+      (meta, index, self) =>
+        index ===
+        self.findIndex((m) => m.key === meta.key && m.value === meta.value)
+    );
+
+    this.update.emit(this.source);
+
+    for (let i = 0; i < this.source.meta.length; i++) {
+      this.source.meta[i].id = i;
+    }
   }
 
   flag() {
@@ -341,5 +393,78 @@ export class SourceDetailsComponent implements OnInit {
     } else {
       this.command.open(this.source);
     }
+  }
+
+  toClipboard(key: string) {
+    if (key && key.trim().length > 0) {
+      this.clipboard.copy(key);
+      this.notify.success('Source Info', 'Copied to Clipboard', '');
+    }
+  }
+
+  onRowEditSave(meta: { key: string; value: string }, ri: number) {
+    if (!meta.key) {
+      return;
+    }
+    const original = this.source.meta.find((m) => m.key === meta.key);
+    const updated = this.metaUpdates[ri];
+    // If they are the same, do nothing
+    if (original && updated) {
+      if (original.value === updated.value && original.key === updated.key) {
+        return;
+      } else {
+        this.update.emit(this.source);
+      }
+    }
+  }
+
+  onRowEditCancel(meta: { key: string; value: string }, ri: number) {
+    if (meta.key) {
+      this.source.meta[ri] = this.metaUpdates[ri];
+      delete this.metaUpdates[ri];
+    }
+  }
+
+  onRowEditInit(meta: { key: string; value: string }, ri: number) {
+    this.metaUpdates[ri] = { ...meta };
+  }
+
+  addMeta(metaEntry: { key: string; value: string }) {
+    const entry = { ...metaEntry };
+
+    if (entry.key && entry.value) {
+      // If the key/value pair already exists, don't add it
+      if (
+        this.source.meta.find(
+          (m) => m.key === entry.key && m.value === entry.value
+        )
+      ) {
+        this.notify.warn(
+          'Source Info',
+          'Ignoring Duplicate',
+          'That key/value pair already exists...',
+          'toast'
+        );
+        return;
+      }
+
+      this.source.meta = [
+        { key: entry.key, value: entry.value },
+        ...this.source.meta,
+      ];
+      this.metaEntry = { key: '', value: '' };
+      this.update.emit(this.source);
+      this.tagInput.nativeElement.focus();
+    } else {
+      this.notify.error('Source Info', 'Missing Key or Value', '');
+    }
+  }
+
+  onRowDelete(meta: { key: string; value: string }, ri: number) {
+    this.source.meta = this.source.meta.filter(
+      (m) => m.key !== meta.key && m.value !== meta.value
+    );
+    delete this.metaUpdates[ri];
+    this.update.emit(this.source);
   }
 }

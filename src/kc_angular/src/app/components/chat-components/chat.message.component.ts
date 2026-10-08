@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ import {
   HostBinding,
   Input,
   OnChanges,
-  OnInit,
   Output,
   SimpleChanges,
 } from '@angular/core';
 import { KsCommandService } from '@services/command-services/ks-command.service';
-import { KnowledgeSource } from '../../models/knowledge.source.model';
-import { AgentType, ChatMessage, MessageRating } from '@app/models/chat.model';
+import { KnowledgeSource } from '@app/models/knowledge.source.model';
+import { AgentType, ChatMessage } from '@app/models/chat.model';
+import { ChatService } from '@services/chat-services/chat.service';
 
 @Component({
   selector: 'chat-message',
@@ -187,7 +187,7 @@ import { AgentType, ChatMessage, MessageRating } from '@app/models/chat.model';
       }
 
       .message-text {
-        white-space: pre-wrap;
+        text-rendering: geometricPrecision;
       }
 
       .user-action {
@@ -200,37 +200,22 @@ import { AgentType, ChatMessage, MessageRating } from '@app/models/chat.model';
         display: flex;
         border-radius: 10px;
         padding: 0 10px 0 10px;
-        margin: 10px;
+        margin: 0.5rem;
         text-align: right;
-        max-width: 70%;
       }
 
       .agent-action {
         color: var(--primary-color) !important;
       }
-
-      .agent-message {
-        color: var(--text-color) !important;
-        background-color: var(--primary-color-text) !important;
-        display: flex;
-        border-radius: 10px;
-        padding: 0 10px 0 10px;
-        margin: 10px;
-        text-align: left;
-        max-width: 70%;
-      }
     `,
   ],
 })
-export class ChatMessageComponent implements OnInit, OnChanges {
+export class ChatMessageComponent implements OnChanges {
   /* The message to display in this component. */
   @Input() message!: ChatMessage;
 
   /* Whether the message is being edited. */
   @Input() editing = false;
-
-  /* Event emitted when the user clicks the "delete" button. */
-  @Output() onDeleteMessage = new EventEmitter();
 
   /* Event emitted when the user finishes editing the message. */
   @Output() onEditMessage = new EventEmitter();
@@ -238,21 +223,10 @@ export class ChatMessageComponent implements OnInit, OnChanges {
   /* Event emitted when the message is edited. */
   @Output() onMessageEdited = new EventEmitter<string>();
 
-  /* Event emitted when the user clicks the "regenerate" button. */
-  @Output() onRegenerateMessage = new EventEmitter();
-
-  /* Event emitted when the user clicks the "ELI5" button. */
-  @Output() onExplainLikeIm5 = new EventEmitter();
-
-  /* Event emitted when the user clicks the "TLDR" button. */
-  @Output() onToLongDidntRead = new EventEmitter();
-
-  @Output() rating = new EventEmitter<MessageRating>();
-
   /* The text of the message being edited. */
   editText = '';
 
-  constructor(private command: KsCommandService) {}
+  constructor(private command: KsCommandService, private chat: ChatService) {}
 
   @HostBinding('class.user-message') get isUserMessage() {
     return this.message && this.message.sender === AgentType.User;
@@ -261,8 +235,6 @@ export class ChatMessageComponent implements OnInit, OnChanges {
   @HostBinding('class.agent-message') get isAgentMessage() {
     return this.message && this.message.sender !== AgentType.User;
   }
-
-  ngOnInit(): void {}
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes.editing) {
@@ -296,14 +268,8 @@ export class ChatMessageComponent implements OnInit, OnChanges {
     message: ChatMessage,
     rating: 'thumbs-up' | 'thumbs-down' | 'none'
   ) {
-    if (!message.rating || message.rating === 'none') {
-      this.rating.emit(rating);
-    } else if (rating === 'thumbs-up') {
-      this.rating.emit(message.rating === 'thumbs-up' ? 'none' : 'thumbs-up');
-    } else if (rating === 'thumbs-down') {
-      this.rating.emit(
-        message.rating === 'thumbs-down' ? 'none' : 'thumbs-down'
-      );
-    }
+    rating = message.rating === rating ? 'none' : rating;
+    message.rating = rating;
+    this.chat.rateMessage(message, rating);
   }
 }

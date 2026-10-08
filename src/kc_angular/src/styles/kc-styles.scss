@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,17 @@
 
 .source-drag-handle {
   cursor: move;
+}
+
+.chat-command-banner {
+  border-radius: 1.5rem 1.5rem 0 0;
+  overflow: hidden;
+
+  // Remove margin from children elements
+  > * {
+    margin: 0;
+    border-radius: 1.5rem 1.5rem 0 0;
+  }
 }
 
 .pulsate-fwd {
@@ -111,11 +122,30 @@
 @keyframes bg-pan-left {
   0% {
     background-position: 100% 50%;
-    background: var(--surface-ground);
+    background: var(--surface-d);
   }
   100% {
     background-position: 0 50%;
+    background: var(--primary-color-text);
+  }
+}
+
+.bg-color-warp {
+  animation: bg-color-warp 6s ease-in-out infinite alternate both;
+}
+
+@keyframes bg-color-warp {
+  0% {
     background: var(--surface-a);
+  }
+  33.3333% {
+    background: var(--surface-b);
+  }
+  66.666% {
+    background: var(--surface-c);
+  }
+  100% {
+    background: var(--primary-color-text);
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -77,18 +77,16 @@ import { ConfirmationService } from 'primeng/api';
         (change)="onNewFile($event)"
       />
       <button
-        #newFileButton
         pButton
         proTip
-        id="newFileButton"
         tipHeader="Web Surfer? Turn URLs into Sources"
-        tipMessage="Got a cool web link? Turn it into a Source! Not only will Knowledge store the link for you to access anytime, but it'll also try to gather some handy metadata. Ready for some surfing?"
+        tipMessage="Got a cool web link? Turn it into a Source! Not only will Knowledge store the link for you to access anytime, but it'll also extract relevant and useful metadata."
         [tipGroups]="['source', 'intro']"
         tipIcon="pi pi-link"
         [tipShowOnHover]="true"
         icon="pi pi-link"
-        class="newFileButton p-button-text outline-none shadow-none non-header"
-        (click)="createPanel.toggle($event)"
+        class="p-button-text outline-none shadow-none non-header"
+        (click)="showImportDialog = true"
       >
         +
       </button>
@@ -132,6 +130,10 @@ import { ConfirmationService } from 'primeng/api';
         </form>
       </ng-template>
     </p-overlayPanel>
+
+    <p-dialog #importDialog header="Web Import" [(visible)]="showImportDialog">
+      <app-import-web (close)="showImportDialog = false"></app-import-web>
+    </p-dialog>
   `,
   styles: [],
 })
@@ -141,6 +143,8 @@ export class CreateComponent {
   linkForm: FormGroup;
 
   files: any[] = [];
+
+  showImportDialog = false;
 
   constructor(
     private dialog: DialogService,

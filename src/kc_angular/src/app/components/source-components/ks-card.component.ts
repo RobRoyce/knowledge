@@ -35,7 +35,7 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
   selector: 'app-ks-card',
   template: `
     <div
-      pDraggable="sources"
+      [pDraggable]="allowDrag ? 'sources' : ''"
       (onDragStart)="dragStart($event, ks)"
       (onDragEnd)="dragEnd($event, ks)"
       *ngIf="ks"
@@ -45,7 +45,8 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
       tipMessage="A perfect blend of style and substance, Source Cards are all about visual appeal! With thumbnails, icons, action buttons, and topics all in one place, you can see the type of Source and its Project at a glance. Your data never looked so good!"
       [tipGroups]="['source']"
       tipIcon="pi pi-id-card"
-      class="hover:shadow-1 border-round-2xl border-1 border-dotted border-400 h-full flex flex-column overflow-hidden justify-content-between surface-card source-drag-handle"
+      class="hover:shadow-1 border-round-2xl border-1 surface-border border-400 h-full flex flex-column overflow-hidden justify-content-between surface-card"
+      [class.source-drag-handle]="allowDrag"
     >
       <div class="flex flex-grow-1">
         <app-ks-thumbnail
@@ -160,12 +161,12 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
               [showFlag]="showFlag"
               [showChat]="showChat"
               [showSavePdf]="showSavePdf"
-              (edit)="onEdit.emit(this.ks)"
-              (preview)="onPreview.emit(this.ks)"
-              (open)="onOpen.emit(this.ks)"
-              (remove)="onRemove.emit(this.ks)"
-              (chat)="onChat.emit(this.ks)"
-              (flag)="onFlagged(this.ks, $event.checked)"
+              (edit)="editSource()"
+              (preview)="previewSource()"
+              (open)="openSource()"
+              (remove)="removeSource()"
+              (chat)="chatSource()"
+              (flag)="flagSource($event.checked)"
             >
             </app-action-bar>
           </div>
@@ -183,6 +184,14 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
         .p-chips-token {
           cursor: pointer;
         }
+      }
+
+      app-action-bar {
+        opacity: 0.35;
+      }
+
+      :host:hover app-action-bar {
+        opacity: 1;
       }
     `,
   ],
@@ -253,6 +262,9 @@ export class KsCardComponent implements OnDestroy, OnChanges {
 
   /* Set an optional label */
   @Input() label?: string;
+
+  /* Determines whether to allow dragging of the card (default: true) */
+  @Input() allowDrag = true;
 
   /* EventEmitter that is triggered when the "Remove" button is pressed */
   @Output() onRemove = new EventEmitter<KnowledgeSource>();
@@ -425,10 +437,59 @@ export class KsCardComponent implements OnDestroy, OnChanges {
   }
 
   dragStart($event: DragEvent, ks: KnowledgeSource) {
-    this.dnd.dragSource($event, ks);
+    if (this.allowDrag) {
+      this.dnd.dragSource($event, ks);
+    }
   }
 
   dragEnd($event: any, rowData: any) {
-    this.dnd.dragSourceEnd($event, rowData);
+    if (this.allowDrag) {
+      this.dnd.dragSourceEnd($event, rowData);
+    }
+  }
+
+  openSource() {
+    if (this.onOpen.observed) {
+      this.onOpen.emit(this.ks);
+    } else {
+      this.command.open(this.ks);
+    }
+  }
+
+  removeSource() {
+    if (this.onRemove.observed) {
+      this.onRemove.emit(this.ks);
+    } else {
+      this.command.remove([this.ks]);
+    }
+  }
+
+  previewSource() {
+    if (this.onPreview.observed) {
+      this.onPreview.emit(this.ks);
+    } else {
+      this.command.preview(this.ks);
+    }
+  }
+
+  editSource() {
+    if (this.onEdit.observed) {
+      this.onEdit.emit(this.ks);
+    } else {
+      this.command.detail(this.ks);
+    }
+  }
+
+  chatSource() {
+    if (this.onChat.observed) {
+      this.onChat.emit(this.ks);
+    } else {
+      this.command.chat(this.ks);
+    }
+  }
+
+  flagSource(checked: boolean) {
+    this.ks.flagged = checked;
+    this.command.update([this.ks]);
   }
 }

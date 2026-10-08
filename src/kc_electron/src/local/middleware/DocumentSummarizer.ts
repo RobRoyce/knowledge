@@ -20,7 +20,6 @@ import ChatController from "../controllers/chat.controller";
 export class DocumentSummarizer {
   private chatController: ChatController;
   constructor(chatController: ChatController) {
-    console.log("DocumentSummarizer initializing...");
     this.chatController = chatController;
   }
 
@@ -28,39 +27,59 @@ export class DocumentSummarizer {
     return async (req: Request, res: Response, next: NextFunction) => {
       // If the request already contains a summary, skip this middleware
       if (req.body.summary) {
+        console.log(
+          "[DocumentSummarizer]: Summary already exists, skipping DocumentSummarizer"
+        );
         return next();
       }
 
-      let text = req.body.text;
+      // Break the text into chunks under the assumption that each token represents approximately 3 characters
+      const CHUNK_SIZE =
+        (this.chatController.getSettings().model.token_limit -
+          this.chatController.getSettings().model.max_tokens) *
+        3;
+      const chunks = req.body.text.match(new RegExp(`.{1,${CHUNK_SIZE}}`, "g"));
 
-      // Absolute limit of text length is 100,000 characters, truncate anything above
-      if (text.length > 100000) {
-        console.warn(
-          `[DocumentSummarizer]: truncating text of size ${text.length} to 100,000 characters`
+      console.log(
+        `[DocumentSummarizer]: Splitting text into ${chunks.length} chunks of size ${CHUNK_SIZE}...`
+      );
+
+      if (chunks && chunks.length > 0) {
+        const summaries = await Promise.all(
+          chunks.map(
+            this.chatController.summarizeChunk.bind(this.chatController)
+          )
         );
-        req.body.text = text.substring(0, 100000);
-        text = req.body.text;
+
+        if (summaries.length === 1) {
+          req.body.summary = summaries[0];
+        } else {
+          const response = await this.chatController.summarizeChunkResponses(
+            summaries
+          );
+
+          if (response === "" || response === undefined || response === null) {
+            return res.status(500).send({
+              message: "OpenAI API Error - Unable to summarize text.",
+            });
+          }
+          req.body.summary = response;
+        }
+      } else {
+        console.warn(
+          "[DocumentSummarizer]: unable to split text into chunks..."
+        );
+        req.body.summary = "";
       }
 
-      // Generate a summary of the text
-      const CHUNK_SIZE = 10000;
-      const chunks = text.match(new RegExp(`.{1,${CHUNK_SIZE}}`, "g"));
+      next();
+    };
+  }
 
-      if (chunks) {
-        const summaries = await Promise.all(
-          chunks.map(this.chatController.summarize.bind(this.chatController))
-        );
-        const initialSummaries = summaries.join("\n").trim();
-        const summary = await this.chatController.summarize(
-          initialSummaries,
-          false,
-          true
-        );
-        req.body.summary = summary;
-        next();
-      } else {
-        console.warn("DocumentSummarizer: unable to split text into chunks...");
-        next();
+  topics() {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      if (req.body.topcs) {
+        return next();
       }
     };
   }

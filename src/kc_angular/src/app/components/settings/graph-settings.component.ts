@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
           <p-panel [toggleable]="true" toggler="header">
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Graph Settings</div>
+                <div class="text-2xl">General</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">
@@ -109,10 +109,10 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
         </div>
 
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Animation Settings</div>
+                <div class="text-2xl">Animation</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">
@@ -151,10 +151,10 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
         </div>
 
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
-                <div class="text-2xl">Physics Simulator</div>
+                <div class="text-2xl">Physics</div>
               </div>
             </ng-template>
             <ng-template pTemplate="content">

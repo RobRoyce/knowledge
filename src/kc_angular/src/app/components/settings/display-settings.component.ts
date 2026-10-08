@@ -28,7 +28,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
     <div class="p-fluid grid gap-2">
       <form [formGroup]="form" class="w-full h-full">
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Appearance</div>
@@ -107,7 +107,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
         </div>
 
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Video</div>
@@ -130,7 +130,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
         </div>
 
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Animations</div>

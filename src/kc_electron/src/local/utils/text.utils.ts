@@ -63,12 +63,18 @@ export default class TextUtils {
     return chunks;
   }
 
+  static limit(text: string, limit: number): string {
+    if (text.length > limit) {
+      text = text.substring(0, limit);
+    }
+    return text;
+  }
+
   static clean(text: string): string {
     text = text.replace(/(https?:\/\/[^\s]+)/g, ""); // Remove URLs
     text = text.replace(/(\r\n|\n|\r)/gm, ""); // Remove newlines
     text = text.replace(/(\t)/gm, ""); // Remove tabs
     text = text.replace(/(\s{2,})/g, " "); // Remove any double spaces
-    text = text.replace(/[^a-zA-Z0-9 ]/g, ""); // Remove any non-alphanumeric characters
 
     // Remove any non-whitespace substrings longer than 32 characters
     // (this is to prevent the API from returning an error)

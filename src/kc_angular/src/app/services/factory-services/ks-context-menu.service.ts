@@ -92,10 +92,6 @@ export class KsContextMenuService {
         separator: true,
       },
       {
-        label: 'Move',
-        icon: PrimeIcons.REPLY,
-      },
-      {
         label: 'Remove',
         icon: PrimeIcons.TRASH,
       },

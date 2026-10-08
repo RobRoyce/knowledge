@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -231,16 +231,15 @@ export class ProjectService {
     }
     this.storageService.kcCurrentProject = newProject.id.value;
     this.refreshTree();
+    return newProject;
   }
 
   /**
-   *
-   * @param updates: ProjectUpdateRequest list that contains one or more project updates
-   *
    * To update a project that was already modified, submit an update with only the ID.
    *
    * Otherwise, include any of the valid ProjectUpdateRequest fields.
    * e.g. create an update with ID (required) and an array removeKnowledgeSource[], etc.
+   * @param updates An array of ProjectUpdateRequest objects
    */
   async updateProjects(updates: ProjectUpdateRequest[]) {
     for (const update of updates) {
@@ -272,9 +271,6 @@ export class ProjectService {
         setDescription('Name', `from ${target.name} to ${update.name}`);
         target.name = update.name;
       }
-
-      // If the update changes the expanded status, update it.
-      target.expanded = update.expanded ?? target.expanded;
 
       // Handle parentId update
       if (update.parentId) {
@@ -424,6 +420,8 @@ export class ProjectService {
         id
       );
     }
+
+    this.scrollToActive(1000);
   }
 
   getCurrentProjectId(): UUID | null {
@@ -439,30 +437,6 @@ export class ProjectService {
       if (project.id.value === id) return project;
     }
     return undefined;
-  }
-
-  getSubTree(id: UUID | string): ProjectIdentifiers[] {
-    if (typeof id !== 'string') {
-      id = id.value;
-    }
-
-    const project = this.projectSource.find((k) => k.id.value === id);
-    let ret: ProjectIdentifiers[] = [];
-    if (!project) {
-      console.error(
-        "Attempting to find project that doesn't exist with ID: ",
-        id
-      );
-      return ret;
-    }
-
-    ret.push({ id: project.id.value, title: project.name });
-    if (project.subprojects && project.subprojects.length > 0) {
-      for (const subProjectId of project.subprojects) {
-        ret = ret.concat(this.getSubTree(subProjectId));
-      }
-    }
-    return ret;
   }
 
   getAncestors(id: string): ProjectIdentifiers[] {
@@ -483,11 +457,15 @@ export class ProjectService {
     return ret;
   }
 
-  async setAllExpanded(expanded: boolean) {
-    for (const project of this.projectSource) {
-      project.expanded = expanded;
-    }
-    this.storageService.saveProjectList(this.projectSource);
+  scrollToActive(timeout = 0) {
+    setTimeout(() => {
+      const classElement = document.getElementsByClassName(
+        'p-treenode-content p-treenode-selectable p-highlight'
+      );
+      if (classElement.length > 0) {
+        classElement[0].scrollIntoView({ behavior: 'smooth' });
+      }
+    }, timeout);
   }
 
   private setDefaultProject() {

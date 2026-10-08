@@ -30,13 +30,11 @@ import {
 import { SourceChatComponent } from '@components/source-components/source.chat.component';
 import { SourceDetailsComponent } from '@components/source-components/source.details.component';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
-import { SourceMetadataComponent } from '@components/source-components/source.metadata.component';
 import { PrimeIcons } from 'primeng/api';
 import { SourceDocumentComponent } from '@components/source-components/source.document.component';
 import { SourceVideoComponent } from '@components/source-components/source.video.component';
 import { SourceTimelineComponent } from './source.timeline.component';
 import { ChatService } from '@services/chat-services/chat.service';
-import { NotificationsService } from '@services/user-services/notifications.service';
 import { SourceBrowserComponent } from '@components/source-components/source.browser.component';
 
 interface TabDescriptor {
@@ -56,6 +54,7 @@ interface TabDescriptor {
     <div class="tabs">
       <div
         proTip
+        *ngFor="let tab of tabs; index as i"
         [tipHeader]="tab.tipHeader"
         [tipMessage]="tab.tipMessage"
         [tipGroups]="['source', 'intro']"
@@ -63,15 +62,18 @@ interface TabDescriptor {
         [tipIcon]="tab.icon"
         [tipShowOnHover]="true"
         class="tab text-center flex-row-center-center border-round-top-2xl font-bold"
-        *ngFor="let tab of tabs; index as i"
         [ngClass]="{
           active: selectedTabIndex === i,
           disabled: tab.disabled,
-          hidden: tab.hidden
+          hidden: tab.hidden,
+          loading: tab.loading
         }"
         (click)="setSelectedTab(i)"
       >
-        <i class="{{ tab.icon }} pr-2"></i>
+        <i *ngIf="!tab.loading; else loading" class="{{ tab.icon }} pr-2"></i>
+        <ng-template #loading>
+          <i class="pi pi-spin pi-spinner font-bold mr-2 text-red-600"></i>
+        </ng-template>
         <span *ngIf="!tab.hidden">{{ tab.label }}</span>
       </div>
     </div>
@@ -90,25 +92,27 @@ interface TabDescriptor {
       .tabs {
         display: flex;
         width: 100%;
-        padding-left: 0.25rem !important;
-        padding-right: 0.25rem !important;
       }
 
       .tab {
         flex: 1;
-        padding: 10px;
+        padding: 1rem !important;
         cursor: pointer;
         background-color: var(--surface-ground);
       }
 
       .tab:not(.active) {
-        background-color: var(--surface-a);
+        background-color: var(--primary-color-text);
       }
 
       .tab.active {
         color: var(--primary-color);
         border-bottom: 1px solid var(--primary-color);
         background-color: var(--surface-card) !important;
+      }
+
+      .tab.loading {
+        cursor: wait;
       }
 
       .tab.disabled {
@@ -127,14 +131,14 @@ export class SourceComponent implements OnInit, OnChanges {
   tabContainer!: ViewContainerRef;
 
   detailsTab: TabDescriptor = {
-    label: 'Details',
+    label: 'Source',
     icon: PrimeIcons.INFO_CIRCLE,
     hidden: false,
     disabled: false,
     loading: false,
     component: SourceDetailsComponent,
-    tipHeader: 'Craving the Deets?',
-    tipMessage: `Head over to the details tab! It's got all the juicy details about the Source, including title, description, and topics. Information galore, right at your fingertips!`,
+    tipHeader: 'Source Details',
+    tipMessage: `This tab shows you all the details about the Source. It's like the Source's personal ID card, with all the important information you need to know.`,
   };
 
   chatTab: TabDescriptor = {
@@ -192,17 +196,6 @@ export class SourceComponent implements OnInit, OnChanges {
     tipMessage: `Meet the video tab! Your personal movie theater, playing Source videos straight from YouTube using the video ID in the Source link. Sit back, relax, and enjoy the show!`,
   };
 
-  metadataTab: TabDescriptor = {
-    label: 'Metadata',
-    icon: PrimeIcons.HASHTAG,
-    hidden: false,
-    disabled: false,
-    loading: false,
-    component: SourceMetadataComponent,
-    tipHeader: 'Ready to go Meta?',
-    tipMessage: `Step into the metadata tab! It's your personal viewing deck for all things meta about the Source. And guess what? You can easily copy any of the metadata to your clipboard with a single click!`,
-  };
-
   tabs: TabDescriptor[] = [
     this.detailsTab,
     this.chatTab,
@@ -210,7 +203,6 @@ export class SourceComponent implements OnInit, OnChanges {
     this.browserTab,
     this.documentTab,
     this.videoTab,
-    this.metadataTab,
   ];
 
   selectedTabIndex = 0;
@@ -227,10 +219,11 @@ export class SourceComponent implements OnInit, OnChanges {
 
   private componentRef?: ComponentRef<any>;
 
-  constructor(
-    private chat: ChatService,
-    private notify: NotificationsService
-  ) {}
+  constructor(private chat: ChatService) {
+    this.chat.loading$.subscribe((loading: boolean) => {
+      this.chatTab.loading = loading;
+    });
+  }
 
   ngOnInit() {
     this.loadSelectedTab();
@@ -244,6 +237,7 @@ export class SourceComponent implements OnInit, OnChanges {
     if (changes.source) {
       this.views(changes.source.currentValue);
       this.loadSelectedTab();
+      this.chat.setTarget({ source: this.source });
     }
 
     if (changes.reset && changes.reset.currentValue) {
@@ -254,10 +248,6 @@ export class SourceComponent implements OnInit, OnChanges {
   }
 
   views(source: KnowledgeSource) {
-    // Metadata is disabled if no metadata exists
-    this.metadataTab.disabled =
-      !this.source.reference.source.website?.metadata?.meta;
-
     // If video, enable video tab and disable document tab
     if (source.ingestType === 'website') {
       source.accessLink = new URL(source.accessLink);
@@ -281,7 +271,6 @@ export class SourceComponent implements OnInit, OnChanges {
       this.documentTab.disabled = this.documentTab.hidden = true;
 
       // If document, enable document table and disable video tab
-      const fileType = source.reference.source.file?.type;
       if (
         `${source.accessLink}`.endsWith('pdf') ||
         `${source.accessLink}`.endsWith('gif') ||
@@ -327,12 +316,12 @@ export class SourceComponent implements OnInit, OnChanges {
 
   private loadComponent(component: Type<any>) {
     this.componentRef = this.tabContainer.createComponent(component);
+
     this.componentRef.instance.source = this.source;
 
     // Special handling for components with outputs and other special cases
     switch (component) {
       case SourceChatComponent:
-        this.loadChat(this.componentRef);
         break;
       case SourceDetailsComponent:
         this.loadDetails(this.componentRef);
@@ -350,14 +339,6 @@ export class SourceComponent implements OnInit, OnChanges {
     componentRef.instance.update.subscribe((source: KnowledgeSource) => {
       this.source = source;
       this.update.emit(source);
-    });
-  }
-
-  private loadChat(componentRef: ComponentRef<SourceChatComponent>) {
-    componentRef.instance.loading$.subscribe((loading: boolean) => {
-      setTimeout(() => {
-        this.chatTab.loading = loading;
-      });
     });
   }
 
@@ -380,7 +361,7 @@ export class SourceComponent implements OnInit, OnChanges {
               input.message.substring(0, 8192)
             );
           } else {
-            this.componentRef?.instance.submit(input.message);
+            this.chat.submit(input.message);
           }
         }, 1000);
       }

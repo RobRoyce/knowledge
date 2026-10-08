@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,13 +14,24 @@
  *  limitations under the License.
  */
 
-import { Component } from '@angular/core';
+import express from "express";
+import ProjectChatController from "../controllers/project.controller";
 
-@Component({
-  selector: 'source-notes',
-  template: ``,
-  styles: [``],
-})
-export class SourceNotesComponent {
-  constructor() {}
+const router = express.Router();
+
+export default class ProjectRoutes {
+  private projectController: ProjectChatController;
+
+  constructor(controller: ProjectChatController) {
+    this.projectController = controller;
+  }
+
+  getRouter() {
+    router.post(
+      "/quiz",
+      this.projectController.quiz.bind(this.projectController)
+    );
+
+    return router;
+  }
 }

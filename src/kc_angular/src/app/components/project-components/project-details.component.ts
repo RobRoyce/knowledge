@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ import { PrimeIcons } from 'primeng/api';
       <div class="h-full w-full" *ngIf="project">
         <p-scrollPanel
           class="h-full w-full"
-          [style]="{ 'max-height': '100%', 'max-width': '52rem' }"
+          [style]="{ 'max-height': '100%', 'max-width': '80rem' }"
         >
           <div class="h-2rem"></div>
           <form [formGroup]="form">

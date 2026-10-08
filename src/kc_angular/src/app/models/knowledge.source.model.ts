@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-import { AuthorModel } from '../../../../kc_shared/models/author.model';
-import { FileSourceModel } from '../../../../kc_shared/models/file.source.model';
-import { UUID } from '../../../../kc_shared/models/uuid.model';
-import { ImportMethod } from '../../../../kc_shared/models/knowledge.source.model';
-import { WebSourceModel } from '../../../../kc_shared/models/web.source.model';
+import { AuthorModel } from '@shared/models/author.model';
+import { FileSourceModel } from '@shared/models/file.source.model';
+import { UUID } from '@shared/models/uuid.model';
+import { ImportMethod } from '@shared/models/knowledge.source.model';
+import { WebSourceModel } from '@shared/models/web.source.model';
 
 export type IngestType =
   | 'file'
@@ -62,6 +62,13 @@ export type KnowledgeSourceEvent = {
   iconText?: string;
 };
 
+export type SourceNote = {
+  title: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export class KnowledgeSource {
   associatedProject: UUID;
   authors: AuthorModel[];
@@ -77,6 +84,8 @@ export class KnowledgeSource {
   ingestType: IngestType;
   rawText?: string;
   flagged?: boolean;
+  meta: { id?: number; key: string; value: string }[] = [];
+  notes: SourceNote[] = [];
   title: string;
   topics?: string[];
   accessLink: URL | string;
@@ -101,6 +110,7 @@ export class KnowledgeSource {
     this.dateAccessed = [];
     this.accessLink = reference.link;
     this.flagged = false;
+    this.notes = [];
     this.topics = [];
     // TODO: this should be replaced with the new EventModel
     this.events = [
@@ -109,24 +119,6 @@ export class KnowledgeSource {
         label: 'Created',
       },
     ];
-  }
-}
-
-export class KnowledgeSourceNote {
-  text: string;
-  dateCreated: string;
-  dateModified: string;
-  dateAccessed: string;
-
-  constructor(text?: string) {
-    this.text = text ? text : '';
-    this.dateCreated = Date();
-    this.dateAccessed = Date();
-    this.dateModified = Date();
-  }
-
-  static blank() {
-    return new KnowledgeSourceNote('test');
   }
 }
 

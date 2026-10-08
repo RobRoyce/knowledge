@@ -20,34 +20,49 @@ import { getDocument } from "pdfjs-dist";
 import { htmlToText, HtmlToTextOptions } from "html-to-text";
 import fs from "fs";
 import TextUtils from "../utils/text.utils";
+import { codeMarkdownMap } from "../../../../kc_shared/constants/supported.file.types";
 
 export class SourceParser {
+  static async isPdf(url: string) {
+    try {
+      const response = await fetch(url, { method: "HEAD" });
+      const contentType = response.headers.get("Content-Type");
+      return contentType === "application/pdf";
+    } catch (error) {
+      console.error("Error fetching the URL:", error);
+      return false;
+    }
+  }
+
   static async getText(req: Request, res: Response, next: NextFunction) {
-    // If the request already contains text, skip this middleware
     if (req.body.text) {
-      console.debug(
-        "Text already extracted from source, skipping SourceParser"
-      );
+      // If the request already contains text, skip this middleware
       return next();
     }
 
-    const source = req.body.source;
-    const ingestType = source.ingestType;
+    const ingestType = req.body.ingestType;
+    const accessLink = req.body.accessLink;
 
     if (ingestType === "file") {
-      req.body.text = await SourceParser.fromFile(source.accessLink);
+      req.body.text = await SourceParser.fromFile(accessLink);
     } else {
-      const accessLink = new URL(source.accessLink);
-      req.body.text = await SourceParser.fromWeb(accessLink);
+      req.body.text = await SourceParser.fromWeb(new URL(accessLink));
     }
 
-    // Clean the text
-    req.body.text = TextUtils.clean(req.body.text);
+    if (
+      req.body.text &&
+      typeof req.body.text === "string" &&
+      req.body.text.trim().length > 0
+    ) {
+      // Clean the text
+      req.body.text = TextUtils.clean(req.body.text);
 
-    console.debug(
-      "Length of text extracted from source: ",
-      req.body.text.length
-    );
+      // Absolute limit of text length is 100,000 characters, truncate anything above
+      // TODO: make this a more meaningful value
+      req.body.text = TextUtils.limit(req.body.text, 100000);
+    } else {
+      req.body.text = "";
+    }
 
     next();
   }
@@ -55,45 +70,44 @@ export class SourceParser {
   static async fromFile(filePath: string) {
     // Check if the file is a PDF
     if (filePath.endsWith(".pdf")) {
-      console.debug("PDF detected, attempting to extract text from PDF...");
       return SourceParser.fromPdf(filePath);
-    } else {
-      const supportedFileTypes = [".txt", ".md", ".html", ".htm"];
-      const codeFileTypes = [
-        ".py",
-        ".js",
-        ".ts",
-        ".java",
-        ".c",
-        ".cpp",
-        ".h",
-        ".hpp",
-        ".cs",
-        ".go",
-        ".rs",
-        ".sh",
-      ];
+    }
 
+    try {
       // Read the file and check if it is a plain text file
+      const fileExtension = "." + filePath.split(".").pop();
+      const supportedFileTypes = [".txt", ".rst"].concat(
+        Object.keys(codeMarkdownMap)
+      );
+
+      // If the file is not a supported file type, return an empty string
+      if (!fileExtension || !supportedFileTypes.includes(fileExtension)) {
+        console.debug("SourceParser: unsupported file type: ", fileExtension);
+        return "";
+      }
+
+      // Otherwise, read the file and return the contents
       const dataBuffer = fs.readFileSync(filePath);
       const text = dataBuffer.toString();
 
-      if (supportedFileTypes.some((type) => filePath.endsWith(type))) {
-        console.log("Supported file type detected, returning text...");
-        return `This file contains the following text: ${text}`;
-      } else if (codeFileTypes.some((type) => filePath.endsWith(type))) {
-        console.log("Code file detected, returning text...");
-        return `This file contains the following source code:
-         === BEGIN CODE
-         ${text}
-         === END CODE
-         `;
-      } else if (TextUtils.isPlainText(text)) {
-        console.log("Plain text file detected, returning text...");
-        return `This file contains the following plain text: ${text}`;
+      const isCode = Object.keys(codeMarkdownMap).some((type) =>
+        filePath.endsWith(type)
+      );
+
+      if (isCode) {
+        // Iterate over all key-value pairs to get fileType
+        Object.entries(codeMarkdownMap).forEach(([key, fileType]) => {
+          if (filePath.endsWith(key)) {
+            return "```" + fileType + "\n" + text + "\n```";
+          }
+        });
+
+        return "```\n" + text + "\n```";
       }
 
-      return "UNREADABLE FILE";
+      return text;
+    } catch (err) {
+      return "";
     }
   }
 
@@ -101,44 +115,46 @@ export class SourceParser {
     const dataBuffer = fs.readFileSync(filePath);
     const uint8Array = new Uint8Array(dataBuffer.buffer);
 
-    // Load the PDF file using PDF.js
-    const loadingTask = getDocument({
-      data: uint8Array,
-    });
-    const pdf = await loadingTask.promise;
-
-    let finalText = "";
-
-    // Loop over each page in the PDF (1-indexed)
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent({
-        includeMarkedContent: false,
+    try {
+      // Load the PDF file using PDF.js
+      const loadingTask = getDocument({
+        data: uint8Array,
       });
+      const pdf = await loadingTask.promise;
 
-      // Concatenate content items to assemble final text
-      // @ts-ignore -- required because the compiler thinks item.str does not exist
-      const strings = content.items.map((item) => item.str);
-      finalText += strings.join(" ") + "\n";
+      let finalText = " ";
+
+      // Loop over each page in the PDF (1-indexed)
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent({
+          includeMarkedContent: false,
+        });
+
+        // Concatenate content items to assemble final text
+        // @ts-ignore -- required because the compiler thinks item.str does not exist
+        const strings = content.items.map((item) => item.str);
+        finalText += strings.join(" ") + "\n";
+      }
+
+      return finalText;
+    } catch (err) {
+      return "";
     }
-
-    return finalText;
   }
 
   static async fromWeb(url: URL) {
     const reqUrl = url.toString();
 
-    if (url.href.endsWith(".pdf")) {
-      console.log("PDF detected, attempting to extract text from PDF...");
-
+    const isPDF = await SourceParser.isPdf(reqUrl);
+    if (url.href.endsWith(".pdf") || isPDF) {
       // Use http to get the PDF, then use pdfjs to extract the text
       const response = await axios.get(reqUrl, { responseType: "arraybuffer" });
       const data = new Uint8Array(response.data);
       const doc = await getDocument(data).promise;
 
       // Extract text from PDF
-      let text =
-        "The following is extracted from the PDF (it may be incomplete but you should still attempt to summarize it).";
+      let text = "";
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
         const content = await page.getTextContent({
@@ -159,12 +175,13 @@ export class SourceParser {
           selectors: [
             "article",
             "p",
+            "code",
             "blockquote",
+            "textarea",
             "ol",
             "ul",
             "h1",
             "h2",
-            "code",
             "mark",
             "table",
             "h3",

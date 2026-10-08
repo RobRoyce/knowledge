@@ -38,7 +38,7 @@
     "@fullcalendar/timegrid": "^5.11.5",
     "chart.js": "^3.9.1",
     "chokidar": "^3.5.3",
-    "cytoscape": "^3.26.0",
+    "cytoscape": "^3.28.1",
     "cytoscape-cola": "^2.5.1",
     "cytoscape-dagre": "^2.5.0",
     "cytoscape-fcose": "^2.2.0",
@@ -63,10 +63,10 @@
     "@angular-eslint/template-parser": "14.4.0",
     "@angular/cli": "^14.2.13",
     "@angular/compiler-cli": "^14.3.0",
-    "@types/cytoscape": "^3.19.13",
-    "@types/cytoscape-dagre": "^2.3.2",
-    "@types/cytoscape-fcose": "^2.2.3",
-    "@types/cytoscape-klay": "^3.1.3",
+    "@types/cytoscape": "^3.19.16",
+    "@types/cytoscape-dagre": "^2.3.3",
+    "@types/cytoscape-fcose": "^2.2.4",
+    "@types/cytoscape-klay": "^3.1.4",
     "@types/marked": "^4.3.2",
     "@typescript-eslint/eslint-plugin": "5.37.0",
     "@typescript-eslint/parser": "5.37.0",
@@ -76,7 +76,7 @@
     "eslint-plugin-prettier": "^4.2.1",
     "ng-packagr": "^14.2.2",
     "typescript": "<4.9.0",
-    "web-worker": "^1.2.0"
+    "web-worker": "^1.3.0"
   },
   "eslintConfig": {
     "extends": [

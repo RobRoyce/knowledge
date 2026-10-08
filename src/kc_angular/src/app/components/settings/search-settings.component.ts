@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
     <div class="p-fluid grid gap-2">
       <form [formGroup]="form" class="w-full h-full">
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Web Search</div>
@@ -53,7 +53,7 @@ import { debounceTime, distinctUntilChanged, tap } from 'rxjs/operators';
         </div>
 
         <div class="col-12">
-          <p-panel [toggleable]="true" toggler="header">
+          <p-panel>
             <ng-template pTemplate="header">
               <div class="flex-row-center-between w-full">
                 <div class="text-2xl">Local Search</div>

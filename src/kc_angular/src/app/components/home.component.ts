@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import { finalize, map, take, takeUntil, tap } from 'rxjs/operators';
   template: `
     <p-contextMenu
       #cm
-      styleClass="shadow-7"
+      styleClass="shadow-7 bg-primary-reverse"
       [model]="ksMenuItems"
       [baseZIndex]="999999"
       [autoZIndex]="true"
@@ -53,7 +53,7 @@ import { finalize, map, take, takeUntil, tap } from 'rxjs/operators';
     >
       <div class="inbox-header flex-grow-0 w-full">
         <div
-          class="flex flex-row justify-content-between align-items-center p-2 border-bottom-1 surface-border mb-2"
+          class="flex flex-row justify-content-between align-items-center p-2 border-bottom-1 border-400"
         >
           <div class="flex flex-row">
             <button
@@ -115,10 +115,10 @@ import { finalize, map, take, takeUntil, tap } from 'rxjs/operators';
           <div class="app-splitter-left">
             <div
               *ngIf="upNext.length > 0"
-              class="h-full pl-2"
+              class="h-full"
               style="overflow-y: auto"
             >
-              <div class="">
+              <div class="shadow-1 sticky top-0 z-5">
                 <div class="p-input-icon-left w-full">
                   <i class="pi pi-filter"></i>
                   <input
@@ -174,7 +174,7 @@ import { finalize, map, take, takeUntil, tap } from 'rxjs/operators';
                 <app-ks-message
                   class="cursor-pointer hover:surface-hover"
                   (click)="loadExamples()"
-                  status="Surprise Me"
+                  status="Surprise Me!"
                 >
                 </app-ks-message>
               </div>

@@ -29,6 +29,8 @@ import {
   ChatSettingsModel,
   SettingsModel,
 } from "../../../kc_shared/models/settings.model";
+import ProjectChatController from "./controllers/project.controller";
+import ProjectRoutes from "./routes/project.routes";
 
 const settings = require("../app/services/settings.service");
 
@@ -40,10 +42,12 @@ export default class ChatServer {
   private chatController;
   private apiController;
   private sourceController;
+  private projectController;
 
   private chatRouter;
   private apiRouter;
   private sourceRouter;
+  private projectRouter;
 
   constructor() {
     this.tokenizerUtils = new TokenizerUtils();
@@ -64,14 +68,20 @@ export default class ChatServer {
       this.tokenizerUtils,
       this.chatController
     );
+    this.projectController = new ProjectChatController(
+      this.tokenizerUtils,
+      this.chatController
+    );
 
     const chatRoutes = new ChatRoutes(this.chatController);
     const apiRoutes = new ApiRoutes(this.apiController);
     const sourceRoutes = new SourceRoutes(this.sourceController);
+    const projectRoutes = new ProjectRoutes(this.projectController);
 
     this.chatRouter = chatRoutes.getRouter();
     this.apiRouter = apiRoutes.getRouter();
     this.sourceRouter = sourceRoutes.getRouter();
+    this.projectRouter = projectRoutes.getRouter();
 
     this.app = express();
     this.setupMiddleware();
@@ -93,5 +103,6 @@ export default class ChatServer {
     this.app.use("/api", ErrorHandler.catchErrors(this.apiRouter));
     this.app.use("/sources", ErrorHandler.catchErrors(this.sourceRouter));
     this.app.use("/chat", ErrorHandler.catchErrors(this.chatRouter));
+    this.app.use("/projects", ErrorHandler.catchErrors(this.projectRouter));
   }
 }

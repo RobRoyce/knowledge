@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
  *  limitations under the License.
  */
 
-import { ChatMessage } from '@app/models/chat.model';
 import { Injectable } from '@angular/core';
 import { map } from 'rxjs/operators';
-import { KnowledgeSource } from '@app/models/knowledge.source.model';
-import { KcProject } from '@app/models/project.model';
-import { ChatService } from '@services/chat-services/chat.service';
 import {
   ChatCompletionMessage,
-  CreateChatCompletionRequestMessage,
+  ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
+import { ChatService } from './chat.service';
+import { KcProject } from '../../models/project.model';
+import { KnowledgeSource } from '../../models/knowledge.source.model';
+import { ChatMessage } from '../../models/chat.model';
 
 @Injectable({
   providedIn: 'root',
@@ -34,7 +34,7 @@ export class ChatPrompts {
   introPrompts = (
     concept: KnowledgeSource | KcProject,
     type: 'Source' | 'Project'
-  ): CreateChatCompletionRequestMessage[] => {
+  ): ChatCompletionMessageParam[] => {
     const prompts = [
       `Information cutoff: December 2021, Current date: ${new Date().toDateString()}.`,
       `Knowledge is a tool for saving, searching, accessing, and exploring all of your favorite websites, documents and files.`,
@@ -100,15 +100,13 @@ export class ChatPrompts {
       sourceIntro.forEach((prompt) => prompts.push(prompt));
     }
 
-    const introPrompts = prompts.map((prompt) => {
-      const message: CreateChatCompletionRequestMessage = {
+    return prompts.map((prompt) => {
+      const message: ChatCompletionMessageParam = {
         role: 'system',
         content: prompt,
       };
       return message;
     });
-
-    return introPrompts;
   };
 
   predictNextQuestion(
@@ -122,13 +120,14 @@ export class ChatPrompts {
     );
 
     // Map those messages into a ChatCompletionRequest object
-    const completionRequests: CreateChatCompletionRequestMessage[] =
-      recentMessages.map((message) => {
+    const completionRequests: ChatCompletionMessageParam[] = recentMessages.map(
+      (message) => {
         return {
           role: message.sender === 'user' ? 'user' : 'assistant',
           content: message.text,
         };
-      });
+      }
+    );
 
     // Explain how to generate the questions to the assistant
     completionRequests.push({
@@ -167,7 +166,7 @@ export class ChatPrompts {
     }
 
     // Use pipe to split the response into an array of strings (one for each question, separated by newline characters)
-    return this.chat.send(completionRequests).pipe(
+    return this.chat.sendChat(completionRequests).pipe(
       map((response: ChatCompletionMessage) => {
         if (response.content) {
           return response.content.split('\n');
@@ -175,25 +174,25 @@ export class ChatPrompts {
           return [];
         }
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Remove any elements that don't end in a question mark
         return response.filter((question: string) => {
           return question.endsWith('?');
         });
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Filter out any empty strings in the array
         return response.filter((question: string) => {
           return question !== '';
         });
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Remove any numbers from the beginning of the response
         return response.map((question: string) => {
           return question.replace(/^\d+\.\s/, '');
         });
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Remove any duplicate questions
         return response.filter(
           (question: string, index: number, self: string[]) => {
@@ -201,13 +200,13 @@ export class ChatPrompts {
           }
         );
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Remove any characters from the beginning of the response that are not letters or numbers
         return response.map((question: string) => {
           return question.replace(/^[^a-zA-Z0-9]+/, '');
         });
       }),
-      map((response) => {
+      map((response: string[]) => {
         // Return only the first 3 questions
         return response.slice(0, 3);
       })

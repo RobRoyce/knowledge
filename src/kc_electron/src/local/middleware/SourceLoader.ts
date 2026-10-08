@@ -22,9 +22,8 @@ const settingsService = require("../../app/services/settings.service");
 
 export class SourceLoader {
   static async load(req: Request, res: Response, next: NextFunction) {
-    const source = req.body.source;
-    const id = source.id;
-    const filename = `${id.value}.json`;
+    const id = req.body.id;
+    const filename = `${id}.json`;
 
     const filepath = path.resolve(
       settingsService.getSettings().system.appPath,
@@ -45,30 +44,16 @@ export class SourceLoader {
       const data = JSON.parse(json);
       req.body.text = data[0] ?? undefined;
       req.body.summary = data[1] ?? undefined;
-    } else {
-      console.debug("Source not found in local storage: ", req.body.source);
     }
-
-    console.debug("Loaded source from local storage: ", req.body.source);
-    console.debug(
-      "Length of text loaded from local storage: ",
-      req.body.text?.length
-    );
-    console.debug(
-      "Length of summary loaded from local storage: ",
-      req.body.summary?.length
-    );
 
     next();
   }
 
   static async store(req: Request, res: Response, next: NextFunction) {
-    const source = req.body.source;
     const text = req.body.text;
     const summary = req.body.summary;
-
-    const id = source.id;
-    const filename = `${id.value}.json`;
+    const id = req.body.id;
+    const filename = `${id}.json`;
 
     const filepath = path.resolve(
       settingsService.getSettings().system.appPath,
@@ -82,8 +67,6 @@ export class SourceLoader {
     if (!fs.existsSync(dirname)) {
       fs.mkdirSync(dirname, { recursive: true });
     }
-
-    console.debug("Storing source text and summary at: ", filepath);
 
     // Store the Source into local JSON file using ID as filename.
     const json = JSON.stringify([text, summary]);

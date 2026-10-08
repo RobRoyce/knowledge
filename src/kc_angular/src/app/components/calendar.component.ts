@@ -58,10 +58,6 @@ import { take, tap } from 'rxjs/operators';
           [showChat]="true"
         >
         </app-ks-card>
-        <app-project-card
-          *ngIf="selectedProject"
-          [kcProject]="selectedProject"
-        ></app-project-card>
       </div>
     </p-overlayPanel>
   `,
@@ -89,12 +85,12 @@ export class CalendarComponent implements OnDestroy {
     private route: ActivatedRoute,
     private topics: TopicService
   ) {
-    this.ksList = data.ksList;
-    this.subscription = route.paramMap.subscribe((params) => {
+    this.ksList = this.data.ksList;
+    this.subscription = this.route.paramMap.subscribe((params) => {
       this.projectId = params.get('projectId') ?? '';
     });
-    this.project = projects.currentProject;
-    this.projectId = route.snapshot.params.projectId ?? '';
+    this.project = this.projects.currentProject;
+    this.projectId = this.route.snapshot.params.projectId ?? '';
   }
 
   ngOnDestroy() {
@@ -110,7 +106,6 @@ export class CalendarComponent implements OnDestroy {
 
     this.calendarOverlay.hide();
     this.selectedKs = undefined;
-    this.selectedProject = undefined;
 
     this.ksList
       .pipe(
@@ -133,16 +128,6 @@ export class CalendarComponent implements OnDestroy {
     }
 
     this.selectedKs = undefined;
-    this.selectedProject = undefined;
-
-    // TODO: Re-enable this once the project card is revised
-    // setTimeout(() => {
-    //   this.calendarOverlay.show($event.event, $event.element);
-    //   const project = this.projects.getProject($event.projectId ?? '')
-    //   if (project) {
-    //     this.selectedProject = project;
-    //   }
-    // })
   }
 
   onRemove(ks: KnowledgeSource) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Rob Royce
+ * Copyright (c) 2022-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -104,7 +104,6 @@ import { ProjectAsTreeNodePipe } from '@pipes/project-as-tree-node.pipe';
 import { ProjectBreadcrumbComponent } from '@components/project-components/project-breadcrumb.component';
 import { ProjectBreadcrumbPipe } from '@pipes/project-breadcrumb.pipe';
 import { ProjectCalendarComponent } from '@components/project-components/project-calendar.component';
-import { ProjectCardComponent } from '@components/project-components/project-card.component';
 import { ProjectCreationDialogComponent } from '@components/project-components/project-creation-dialog.component';
 import { ProjectDetailsComponent } from '@components/project-components/project-details.component';
 import { ProjectNamePipe } from '@pipes/project-name.pipe';
@@ -150,7 +149,6 @@ import { RecreateViewDirective } from './directives/recreate-view.directive';
 import { SourceComponent } from '@components/source-components/source.component';
 import { SourceDetailsComponent } from '@components/source-components/source.details.component';
 import { SourceChatComponent } from '@components/source-components/source.chat.component';
-import { SourceMetadataComponent } from '@components/source-components/source.metadata.component';
 import { SourceVideoComponent } from '@components/source-components/source.video.component';
 import { SourceDocumentComponent } from '@components/source-components/source.document.component';
 import { SourceTimelineComponent } from '@components/source-components/source.timeline.component';
@@ -158,10 +156,18 @@ import { IconComponent } from '@components/shared/icon.component';
 import { DragDropModule } from 'primeng/dragdrop';
 import { SanitizeHtmlPipe } from '@pipes/sanitize-html.pipe';
 import { SourceBrowserComponent } from '@components/source-components/source.browser.component';
-import { SourceNotesComponent } from '@components/source-components/source.notes.component';
+import { SourceNoteComponent } from '@components/source-components/source-note.component';
 import { ProTipDirective } from './directives/pro-tip.directive';
 import { ProTipsComponent } from '@components/shared/pro-tips.component';
 import { ChatInputComponent } from '@components/chat-components/chat.input.component';
+import { WebImportComponent } from '@components/shared/web.import.component';
+import { MessageModule } from 'primeng/message';
+import { QuizMessage } from '@components/chat-components/message-templates/quiz.message';
+import { CategorizeMessage } from '@components/chat-components/message-templates/categorize.message';
+import { TreeTableModule } from 'primeng/treetable';
+import { TopicMessage } from '@components/chat-components/message-templates/topic.message';
+import { ChatMessageDirective } from './directives/chat-message.directive';
+import { CarouselModule } from 'primeng/carousel';
 
 @NgModule({
   declarations: [
@@ -207,7 +213,6 @@ import { ChatInputComponent } from '@components/chat-components/chat.input.compo
     ProjectBreadcrumbComponent,
     ProjectBreadcrumbPipe,
     ProjectCalendarComponent,
-    ProjectCardComponent,
     ProjectCreationDialogComponent,
     ProjectDetailsComponent,
     ProjectNamePipe,
@@ -230,16 +235,20 @@ import { ChatInputComponent } from '@components/chat-components/chat.input.compo
     SourceComponent,
     SourceDetailsComponent,
     SourceChatComponent,
-    SourceMetadataComponent,
     SourceVideoComponent,
     SourceBrowserComponent,
-    SourceNotesComponent,
+    SourceNoteComponent,
     SourceDocumentComponent,
     SourceTimelineComponent,
     IconComponent,
     SanitizeHtmlPipe,
     ProTipDirective,
     ProTipsComponent,
+    WebImportComponent,
+    QuizMessage,
+    CategorizeMessage,
+    TopicMessage,
+    ChatMessageDirective,
   ],
   imports: [
     A11yModule,
@@ -308,6 +317,9 @@ import { ChatInputComponent } from '@components/chat-components/chat.input.compo
     TreeSelectModule,
     YouTubePlayerModule,
     DragDropModule,
+    MessageModule,
+    TreeTableModule,
+    CarouselModule,
   ],
   providers: [
     ConfirmationService,

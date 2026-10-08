@@ -26,7 +26,6 @@ import { NotificationsService } from '@services/user-services/notifications.serv
 import { IngestService } from '@services/ingest-services/ingest.service';
 import { DragAndDropService } from '@services/ingest-services/drag-and-drop.service';
 import { KsCommandService } from '@services/command-services/ks-command.service';
-import { ProjectTreeFactoryService } from '@services/factory-services/project-tree-factory.service';
 import { KsDetailsComponent } from '@components/source-components/ks-details.component';
 import { debounceTime, map, take, tap } from 'rxjs/operators';
 import { BehaviorSubject, Observable, throttleTime } from 'rxjs';
@@ -147,13 +146,12 @@ export class AppComponent implements OnInit {
     private router: Router,
     private sidebar: SidebarService,
     private themes: ThemeService,
-    private tips: ProTipService,
-    private tree: ProjectTreeFactoryService
+    private tips: ProTipService
   ) {
     this.sidebarItems$ = sidebar.items$;
 
     /* Set window icons based on OS */
-    settings.all
+    this.settings.all
       .pipe(
         take(2),
         map((s) => s.system),
@@ -166,7 +164,7 @@ export class AppComponent implements OnInit {
       .subscribe();
 
     /* enable/disable animations */
-    settings.display
+    this.settings.display
       .pipe(
         map((d) => d.animations),
         tap((animations) => {
@@ -176,7 +174,7 @@ export class AppComponent implements OnInit {
       .subscribe();
 
     /* Listen for route changes and update the sidebar accordingly */
-    router.events
+    this.router.events
       .pipe(
         tap((events) => {
           if (events instanceof NavigationEnd) {
@@ -217,6 +215,12 @@ export class AppComponent implements OnInit {
           }
 
           if (ks && !this.sourceInfoDialog) {
+            // Hide all other elements on the page so they don't show through the dialog
+            const elements = document.getElementsByClassName('app-body');
+            for (let i = 0; i < elements.length; i++) {
+              elements[i].classList.add('hidden');
+            }
+
             this.sourceInfoDialog = this.dialog.open(KsDetailsComponent, {
               data: { ks: ks, view: view },
               width: '100vw !important',
@@ -238,20 +242,33 @@ export class AppComponent implements OnInit {
                 this.sourceInfoDialog.maximize({});
               }
             });
-            this.sourceInfoDialog.onClose
-              .pipe(
-                tap(() => {
-                  this.sourceInfoDialog = undefined;
-                })
-              )
-              .subscribe();
+            this.sourceInfoDialog.onClose.subscribe(() => {
+              this.sourceInfoDialog = undefined;
+
+              // Show all other elements on the page
+              const elements = document.getElementsByClassName('app-body');
+              for (let i = 0; i < elements.length; i++) {
+                elements[i].classList.remove('hidden');
+              }
+
+              /**
+               * If we're on the chat view, make sure the chat service target is the current project
+               * Required because the chat service will set the target to the source if the user goes
+               * to the Source chat in the dialog
+               */
+              if (this.selectedView === 'Chat') {
+                this.chat.setTarget({
+                  project: this.projects.getProject(this.projectId),
+                });
+              }
+            });
           }
         })
       )
       .subscribe();
 
     /* Listen for Project Info Dialog events, open/close the dialog as necessary */
-    pCommand.detailEvent
+    this.pCommand.detailEvent
       .pipe(
         tap((project) => {
           if (!project) {
@@ -260,7 +277,11 @@ export class AppComponent implements OnInit {
           this.projectInfoDialog = this.dialog.open(ProjectDetailsComponent, {
             data: { project: project },
             showHeader: false,
-            contentStyle: { 'border-radius': '10px' },
+            contentStyle: {
+              'border-radius': '10px',
+              width: '50vw',
+              'max-width': '60rem',
+            },
             closeOnEscape: true,
           });
           this.projectInfoDialog.onClose
@@ -275,7 +296,7 @@ export class AppComponent implements OnInit {
       .subscribe();
 
     /* Use the ingest queue to update the inbox badge on the sidebar */
-    ingest.queue
+    this.ingest.queue
       .pipe(
         tap((upNext) => {
           this.inboxBadge = upNext.length;
@@ -284,7 +305,7 @@ export class AppComponent implements OnInit {
       .subscribe();
 
     /* When the project changes, update the sidebar and the project id */
-    projects.currentProject
+    this.projects.currentProject
       .pipe(
         debounceTime(250),
         tap((project) => {
@@ -308,7 +329,7 @@ export class AppComponent implements OnInit {
       .subscribe();
 
     /* Ensure the theme has been completely loaded on startup */
-    themes.setLocal().then(() => {
+    this.themes.setLocal().then(() => {
       setTimeout(() => {
         this.readyToShow = true;
       }, Math.floor(Math.random() * 1000));

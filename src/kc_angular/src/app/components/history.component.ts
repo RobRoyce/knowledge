@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ type HistoryEvent = {
       #historyPanel
       appendTo="body"
       [focusOnShow]="true"
-      styleClass="history-panel shadow-6"
+      styleClass="history-panel shadow-6 surface-ground"
     >
       <ng-template pTemplate="content">
         <div class="mb-3 static sticky">

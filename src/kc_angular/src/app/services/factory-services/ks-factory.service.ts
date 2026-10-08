@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service'
 import { ExtractorService } from '@services/ingest-services/extractor.service';
 import { FaviconService } from '@services/ingest-services/favicon.service';
 import { FileSourceModel } from '@shared/models/file.source.model';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
   IngestType,
   KnowledgeSource,
@@ -67,15 +67,19 @@ export class KsFactoryService {
 
   examples(): Observable<KnowledgeSource[]> {
     return this.http
-      .get(
-        'https://knowledge-app.s3.us-west-1.amazonaws.com/examples_v3.json',
-        { responseType: 'json' }
-      )
+      .get('https://knowledge-app.s3.us-west-1.amazonaws.com/examples.json', {
+        responseType: 'json',
+        headers: new HttpHeaders({
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+          Expires: 'Sat, 01 Jan 2000 00:00:00 GMT',
+        }),
+      })
       .pipe(
         map((example: any) => {
           let examples: ExampleSource[] = example;
           this.shuffleArray(examples);
-          examples = examples.slice(0, 5);
+          examples = examples.slice(0, 6);
           const requests: KnowledgeSourceFactoryRequest = {
             ingestType: 'website',
             links: examples.map((example) => example.accessLink),
@@ -216,6 +220,8 @@ export class KsFactoryService {
         },
         link: '',
       },
+      meta: [],
+      notes: [],
       ingestType: 'website',
       associatedProject: { value: '' },
       // TODO: remove these to align with new model...
@@ -303,10 +309,25 @@ export class KsFactoryService {
     });
   }
 
+  private getLink(link: URL): string {
+    // If the link is a PDF file from arxiv.org, set the link to `https://arxiv.org/abs/${arxivId}` instead of the PDF link
+    if (
+      link.hostname === 'arxiv.org' &&
+      link.pathname.split('/')[1] === 'pdf'
+    ) {
+      const arxivId = link.pathname.split('/')[2];
+      if (arxivId) {
+        return `https://arxiv.org/abs/${arxivId}`;
+      }
+    }
+
+    // Otherwise, return the original link
+    return link.href;
+  }
+
   private getWebsiteMetadata(ks: KnowledgeSource): Promise<KnowledgeSource> {
     return new Promise<KnowledgeSource>((resolve) => {
-      const link =
-        typeof ks.accessLink === 'string' ? ks.accessLink : ks.accessLink.href;
+      const link = this.getLink(new URL(ks.accessLink));
       this.extractor
         .extractWebsiteMetadata(link)
         .then((metadata) => {
@@ -337,6 +358,15 @@ export class KsFactoryService {
 
           if (ks.reference.source.website)
             ks.reference.source.website.metadata = metadata;
+
+          ks.meta = [];
+          if (metadata.meta) {
+            for (const meta of metadata.meta) {
+              if (meta.key && meta.value) {
+                ks.meta.push({ key: meta.key, value: meta.value });
+              }
+            }
+          }
         })
         .catch((reason) => {
           console.warn('Unable to extract website metadata because: ', reason);

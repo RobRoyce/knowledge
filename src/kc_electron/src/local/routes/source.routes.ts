@@ -19,6 +19,7 @@ import SourceChatController from "../controllers/source.controller";
 import { SourceParser } from "../middleware/SourceParser";
 import { SourceLoader } from "../middleware/SourceLoader";
 import { DocumentSummarizer } from "../middleware/DocumentSummarizer";
+import { SourceValidator } from "../middleware/SourceValidator";
 
 const router = express.Router();
 
@@ -29,7 +30,6 @@ export default class SourceRoutes {
   constructor(controller: SourceChatController) {
     this.sourceController = controller;
     this.summarizer = new DocumentSummarizer(controller.getChatController());
-    this.getRouter();
   }
 
   get controller() {
@@ -37,11 +37,15 @@ export default class SourceRoutes {
   }
 
   getRouter() {
+    router.use(SourceValidator.validate);
+
     // Load the source from the database
     router.use(SourceLoader.load);
 
     // Parse the source into text (if necessary)
     router.use(SourceParser.getText);
+
+    router.use(SourceValidator.hasText);
 
     // Summarize the text (if necessary)
     router.use(this.summarizer.summarize());
@@ -53,13 +57,25 @@ export default class SourceRoutes {
     router.post("/", this.controller.chat.bind(this.controller));
 
     // Intro chat with the source (basically a summary)
-    router.post("/intro", this.controller.intro.bind(this.controller));
+    router.post("/summarize", this.controller.summarize.bind(this.controller));
+
+    router.post(
+      "/categorize",
+      this.controller.categorize.bind(this.controller)
+    );
+
+    // Get customized advice on how to read the Source
+    router.post("/tutor", this.controller.tutor.bind(this.controller));
+
+    router.post("/quiz", this.controller.quiz.bind(this.controller));
+
+    router.post("/topics", this.controller.topics.bind(this.controller));
 
     // An endpoint to regenerate previous responses
-    router.post(
-      "/regenerate",
-      this.controller.regenerate.bind(this.controller)
-    );
+    // router.post(
+    //   "/regenerate",
+    //   this.controller.regenerate.bind(this.controller)
+    // );
 
     return router;
   }

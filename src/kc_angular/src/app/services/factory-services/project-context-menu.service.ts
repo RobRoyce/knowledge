@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import { KcProject, ProjectUpdateRequest } from '@app/models/project.model';
 import { MenuItem, PrimeIcons } from 'primeng/api';
 import { ProjectCommandService } from '@services/command-services/project-command.service';
 import { ProjectService } from './project.service';
+import { ProjectTreeFactoryService } from '@services/factory-services/project-tree-factory.service';
+import { Clipboard } from '@angular/cdk/clipboard';
 
 @Injectable({
   providedIn: 'root',
@@ -26,7 +28,9 @@ import { ProjectService } from './project.service';
 export class ProjectContextMenuService {
   constructor(
     private projects: ProjectService,
-    private pCommand: ProjectCommandService
+    private pCommand: ProjectCommandService,
+    private tree: ProjectTreeFactoryService,
+    private clipboard: Clipboard
   ) {}
 
   generate(project: KcProject, projects?: KcProject[]): MenuItem[] {
@@ -100,6 +104,32 @@ export class ProjectContextMenuService {
         command: () => {
           this.pCommand.copyJSON(projects ? projects : [project]);
         },
+      },
+      {
+        label: 'Copy Project Tree',
+        icon: PrimeIcons.COPY,
+        items: [
+          {
+            label: 'YAML',
+            icon: 'pi pi-file',
+            command: () => {
+              const treeNode = this.tree.findTreeNode(project.id.value);
+              if (!treeNode) return;
+              const yaml = this.tree.generateYAML(treeNode, 0);
+              this.clipboard.copy(yaml);
+            },
+          },
+          {
+            label: 'JSON',
+            icon: 'pi pi-file',
+            command: () => {
+              const treeNode = this.tree.findTreeNode(project.id.value);
+              if (!treeNode) return;
+              const json = this.tree.generateJSON(treeNode);
+              this.clipboard.copy(json);
+            },
+          },
+        ],
       },
       {
         label: '',

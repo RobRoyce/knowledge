@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 import { AutoscanService } from './autoscan.service';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, skip } from 'rxjs';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ElectronIpcService } from '../ipc-services/electron-ipc.service';
 import { ExtensionService } from './extension.service';
@@ -78,14 +78,15 @@ export class IngestService implements OnDestroy {
         ksQueue.find(
           (k) =>
             k.id.value === ks.id.value ||
-            k.accessLink == ks.accessLink ||
+            k.accessLink.toString() == ks.accessLink.toString() ||
             k.title === ks.title
         )
       ) {
         this.notify.warn(
           'Ingest Service',
           'Ignoring Duplicate',
-          `Source: ${ks.title}`
+          `Source: ${ks.title}`,
+          'toast'
         );
         continue;
       }
@@ -93,7 +94,27 @@ export class IngestService implements OnDestroy {
       ksNext.push(ks);
     }
 
+    if (ksNext.length <= 0) {
+      return;
+    }
+
     ksQueue = ksQueue.concat(ksNext);
+
+    ksQueue.forEach((ks) => {
+      ks.dateCreated = new Date(ks.dateCreated);
+    });
+
+    // Sort by date created
+    ksQueue.sort((a, b) => {
+      if (a.dateCreated < b.dateCreated) {
+        return -1;
+      }
+      if (a.dateCreated > b.dateCreated) {
+        return 1;
+      }
+      return 0;
+    });
+
     this._queue.next(ksQueue);
 
     if (ksList.length <= 0) {
@@ -103,7 +124,7 @@ export class IngestService implements OnDestroy {
     this.notify.success(
       'IngestService',
       'Source Imported',
-      `Imported ${ksList.length} Source${ksList.length > 1 ? 's' : ''}.`
+      `Imported ${ksNext.length} Source${ksNext.length > 1 ? 's' : ''}.`
     );
   }
 
@@ -225,7 +246,7 @@ export class IngestService implements OnDestroy {
    * @private
    */
   private extensionSubscribe() {
-    this.extension.links.subscribe((webSource) => {
+    this.extension.links.pipe(skip(1)).subscribe((webSource) => {
       if (!webSource || !webSource.accessLink) {
         this.notify.warn(
           'IngestService',

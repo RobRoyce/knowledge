@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright (c) 2021-2023 Rob Royce
+  ~ Copyright (c) 2021-2024 Rob Royce
   ~
   ~  Licensed under the Apache License, Version 2.0 (the "License");
   ~  you may not use this file except in compliance with the License.
@@ -116,7 +116,7 @@
             src="https://knowledge-app.s3.us-west-1.amazonaws.com/kc-icon-transparent.png"
           />
         </div>
-        <div class="overflow-y-auto mt-3">
+        <div class="overflow-y-auto">
           <ul class="list-none py-3 pl-2 pr-0 m-0">
             <li *ngFor="let item of (sidebarItems$ | async)"
                 class="mb-2"
@@ -208,7 +208,7 @@
       id="app-router-outlet"
       style="max-height: calc(100vh - 80px); max-width: calc(100vw - 61px)"
     >
-      <div class="flex flex-column flex-grow-0 h-full">
+      <div class="flex flex-column flex-grow-0 h-full" style="min-width: fit-content">
         <app-projects-tree
           *ngIf="projectTreeVisible"
           [@flyInOut]="animate"
@@ -217,7 +217,7 @@
       </div>
       <div
         [@routeAnimations]="routeAnimationData"
-        class="flex-column flex-grow-1 h-full"
+        class="flex-column flex-grow-1 h-full app-body"
       >
         <router-outlet></router-outlet>
       </div>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2024 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -215,32 +215,6 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
                     {{ rowData[col.field] | date : 'mediumDate' }}
                   </div>
                 </div>
-
-                <div *ngIf="col.field === 'dateDue'">
-                  <div *ngIf="!rowData[col.field]">-</div>
-                  <div *ngIf="rowData[col.field]">
-                    <div
-                      *ngIf="pastDue(rowData[col.field]); else dueDate"
-                      style="color: red"
-                    >
-                      <div *ngIf="!ksTableShowCountdownInsteadOfDates">
-                        {{ rowData[col.field] | date : 'mediumDate' }}
-                      </div>
-                      <div *ngIf="ksTableShowCountdownInsteadOfDates">
-                        {{ rowData[col.field] | countdown }}
-                      </div>
-                    </div>
-                    <ng-template #dueDate>
-                      <div *ngIf="!ksTableShowCountdownInsteadOfDates">
-                        {{ rowData[col.field] | date : 'mediumDate' }}
-                      </div>
-                      <div *ngIf="ksTableShowCountdownInsteadOfDates">
-                        {{ rowData[col.field] | countdown }}
-                      </div>
-                    </ng-template>
-                  </div>
-                </div>
-
                 <div
                   *ngIf="
                     col.field === 'dateModified' || col.field === 'dateAccessed'
@@ -323,7 +297,7 @@ import { DragAndDropService } from '@services/ingest-services/drag-and-drop.serv
     <p-contextMenu
       #cm
       [model]="ksMenuItems"
-      styleClass="shadow-7"
+      styleClass="shadow-7 bg-primary-reverse"
       (onShow)="onKsContextMenu()"
       appendTo="body"
     >
@@ -348,7 +322,6 @@ export class KsTableComponent implements OnInit, OnChanges {
     { field: 'icon', header: '' },
     { field: 'title', header: 'Title' },
     { field: 'associatedProject', header: 'Project' },
-    { field: 'dateDue', header: 'Due Date' },
     { field: 'dateCreated', header: 'Created' },
     { field: 'dateAccessed', header: 'Accessed' },
     { field: 'dateModified', header: 'Modified' },
@@ -439,6 +412,9 @@ export class KsTableComponent implements OnInit, OnChanges {
           return nA < nB ? 1 : nA > nB ? -1 : 0;
         });
       });
+
+      // Set pagination to first page
+      this.first = 0;
     }
   }
 
@@ -476,7 +452,6 @@ export class KsTableComponent implements OnInit, OnChanges {
         });
         break;
       case 'dateCreated':
-      case 'dateDue':
         event.data.sort((d1, d2) => {
           if (!event.field || !event.order) {
             return 0;
