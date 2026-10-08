@@ -14,7 +14,10 @@
  *  limitations under the License.
  */
 
-import express, { Express } from "express";
+import express, { Express, NextFunction, Request, Response } from "express";
+import crypto from "crypto";
+import { AddressInfo } from "net";
+import { BackendEndpoint } from "../app/backend";
 import cors from "cors";
 import { ErrorHandler } from "./middleware/ErrorHandler";
 import ChatController from "./controllers/chat.controller";
@@ -49,7 +52,10 @@ export default class ChatServer {
   private sourceRouter;
   private projectRouter;
 
-  constructor() {
+  private token: string;
+
+  constructor(token: string) {
+    this.token = token;
     this.tokenizerUtils = new TokenizerUtils();
 
     settings.all
@@ -88,15 +94,49 @@ export default class ChatServer {
     this.setupRoutes();
   }
 
-  start(port: number) {
-    this.app.listen(port, () => {
-      console.log(`[Knowledge]: chat server listening on port ${port}`);
+  /**
+   * Listen on an ephemeral loopback port. Resolves to the endpoint for this
+   * instance, or to an error that the renderer can show.
+   */
+  start(): Promise<BackendEndpoint> {
+    return new Promise((resolve) => {
+      const server = this.app.listen(0, "127.0.0.1", () => {
+        const { port } = server.address() as AddressInfo;
+        const url = `http://127.0.0.1:${port}`;
+        console.log(`[Knowledge]: chat server listening on ${url}`);
+        resolve({ url, token: this.token });
+      });
+
+      server.on("error", (err: Error) => {
+        console.error(`[Knowledge]: chat server unavailable: ${err.message}`);
+        resolve({ error: `Chat server unavailable: ${err.message}` });
+      });
     });
   }
 
   private setupMiddleware() {
-    this.app.use(express.json({ limit: "50mb" })); // Parse JSON request bodies
-    this.app.use(cors()); // Enable CORS
+    this.app.use(cors());
+    this.app.use(this.requireToken.bind(this));
+    this.app.use(express.json({ limit: "50mb" }));
+  }
+
+  /**
+   * Only the renderer of this instance knows the token. Loopback binding
+   * and CORS alone do not restrict other local clients.
+   */
+  private requireToken(req: Request, res: Response, next: NextFunction) {
+    if (req.method === "OPTIONS") {
+      return next();
+    }
+    const expected = Buffer.from(`Bearer ${this.token}`);
+    const actual = Buffer.from(req.headers.authorization ?? "");
+    if (
+      actual.length !== expected.length ||
+      !crypto.timingSafeEqual(actual, expected)
+    ) {
+      return res.status(401).json({ error: "Missing or invalid token" });
+    }
+    next();
   }
 
   private setupRoutes() {

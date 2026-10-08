@@ -28,10 +28,8 @@ export class FaviconService {
   private googleFaviconSize = '32';
   private googleFaviconServicePrefix = `https://s2.googleusercontent.com/s2/favicons?domain_url=`;
   private googleFaviconServiceSuffix = `&sz=${this.googleFaviconSize}`;
-  private defaultIcon =
-    'https://knowledge-app.s3.us-west-1.amazonaws.com/kc-icon-transparent.png';
-  private loadingIcon =
-    'https://knowledge-app.s3.us-west-1.amazonaws.com/kc-icon-transparent.png';
+  private defaultIcon = 'assets/img/kc-icon-transparent.png';
+  private loadingIcon = 'assets/img/kc-icon-transparent.png';
 
   constructor(
     private httpClient: HttpClient,
@@ -114,11 +112,12 @@ export class FaviconService {
           resolve(icons);
         },
         error: (error) => {
-          this.notifications.error(
+          this.notifications.warn(
             'Favicon Extractor',
-            'Failed to get Favicon',
-            error
+            'Favicon Unavailable',
+            `${error}`
           );
+          resolve(urls.map(() => this.defaultIcon));
         },
       });
     });

@@ -21,6 +21,12 @@ const autoUpdater = share.autoUpdater;
 import { IpcMessage } from "../../../../kc_shared/models/electron.ipc.model";
 
 const checkForUpdate = ipcMain.on("A2E:AutoUpdate:Check", (_: any) => {
+  if (!share.app.isPackaged || process.env.KC_ENABLE_UPDATES !== "1") {
+    console.log(
+      "[AutoUpdate]: update check disabled (set KC_ENABLE_UPDATES=1)"
+    );
+    return;
+  }
   autoUpdater
     .checkForUpdates()
     .then((result: any) => {

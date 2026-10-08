@@ -36,6 +36,7 @@ Unleash the power of context with the built-in Chromium browser (just like Googl
   Knowledge application more efficiently.
 - [Feature Roadmap](https://github.com/KnowledgeCanvas/knowledge/wiki/Feature-Roadmap): A list of existing and planned
   features.
+- [Local Development](DEVELOPMENT.md): Build and start Knowledge from source, with an isolated data profile.
 - [Developer Guide](https://github.com/KnowledgeCanvas/knowledge/wiki/Development): Interested in contributing to
   Knowledge? Check here first!
 - [Debug Guide](https://github.com/KnowledgeCanvas/knowledge/wiki/Debugging): Something not working? Check here for

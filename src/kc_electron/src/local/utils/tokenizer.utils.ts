@@ -23,13 +23,12 @@ import {
 import fs from "fs";
 import path from "path";
 import { app } from "electron";
+import { resourcesDir } from "../../app/profile";
 import {
   ChatModel,
   SupportedChatModels,
 } from "../../../../kc_shared/models/chat.model";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-
-const settingsService = require("../../app/services/settings.service");
 
 export default class TokenizerUtils {
   private tiktoken!: Tiktoken;
@@ -37,7 +36,12 @@ export default class TokenizerUtils {
   private model: TiktokenModel = "gpt-3.5-turbo";
 
   constructor() {
-    this.initialize();
+    this.initialize().catch((e) => {
+      console.error(
+        "[Knowledge]: tokenizer unavailable. AI chat will not work.",
+        e.message
+      );
+    });
   }
 
   async initialize() {
@@ -260,31 +264,30 @@ export default class TokenizerUtils {
   }
 
   /**
-   * Get the path to the tiktoken wasm file. This is used to initialize the tokenizer.
+   * Get the path to the tiktoken wasm file. Packaged builds copy it into
+   * Resources through extraResources. Development builds read it from
+   * node_modules.
    * @private
    */
   private getWasmPath() {
-    // TODO: Figure out how to do this in a cleaner way
     const possiblePaths = [
-      path.resolve(app.getAppPath(), "..", "tiktoken_bg.wasm"),
+      path.join(resourcesDir(), "tiktoken_bg.wasm"),
       path.join(
-        settingsService.getSettings().system.resourcesPath,
+        app.getAppPath(),
+        "node_modules",
+        "@dqbd",
+        "tiktoken",
         "tiktoken_bg.wasm"
       ),
-      path.join(process.cwd(), "Resources", "tiktoken_bg.wasm"),
-      path.join(process.cwd(), "resources", "tiktoken_bg.wasm"),
-      path.join(__dirname, "Resources", "tiktoken_bg.wasm"),
-      path.join(__dirname, "resources", "tiktoken_bg.wasm"),
-      path.join("tiktoken_bg.wasm"),
-      path.join(process.cwd(), "tiktoken_bg.wasm"),
     ];
-
     for (const possible of possiblePaths) {
       if (fs.existsSync(possible)) {
         return possible;
       }
     }
-    throw new Error("Could not find tiktoken wasm file.");
+    throw new Error(
+      `Could not find tiktoken_bg.wasm. Checked: ${possiblePaths.join(", ")}`
+    );
   }
 
   /**

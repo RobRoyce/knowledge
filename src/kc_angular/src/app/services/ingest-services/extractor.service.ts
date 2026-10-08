@@ -262,31 +262,4 @@ export class ExtractorService {
       );
     });
   }
-
-  async textFromFile(file: File): Promise<any> {
-    return new Promise<string>((resolve, reject) => {
-      const headers = new Headers();
-      headers.append('Content-Type', file.type);
-      headers.append('Accept', 'text/html');
-      headers.append('X-Tika-OCRLanguage', 'eng');
-
-      const requestOptions: RequestInit = {
-        method: 'PUT',
-        headers: headers,
-        body: file,
-        redirect: 'follow',
-      };
-
-      fetch('http://localhost:9998/tika', requestOptions)
-        .then((response) => {
-          response.text().then((raw) => {
-            resolve(raw);
-          });
-        })
-        .catch((error) => {
-          this.notifications.error('ExtractorService', 'Tika Error', error);
-          reject(error);
-        });
-    });
-  }
 }

@@ -40,6 +40,7 @@ import os from "os";
 import * as lodash from "lodash";
 import { KcTheme } from "../../../../kc_shared/models/style.model";
 import { app, BrowserWindow, ipcMain } from "electron";
+import { profile, resourcesDir } from "../profile";
 
 const RET_OK = 0;
 const RET_FAIL = -1;
@@ -70,8 +71,7 @@ class SettingsService {
 
   constructor() {
     // 1. Load optimal default settings on every startup
-    const resources = path.join(process.cwd(), "Resources");
-    const envPath = path.resolve(resources, "app.env");
+    const envPath = path.resolve(resourcesDir(), "app.env");
     const defaults = this.defaults(envPath);
 
     // 2. Instantiate the `all` settings Observable for Electron-side usage
@@ -151,7 +151,7 @@ class SettingsService {
       firstRun: true,
       homePath: os.homedir(),
       pathSep: path.sep,
-      resourcesPath: path.join(process.cwd(), "Resources"),
+      resourcesPath: resourcesDir(),
       settingsPath: "",
       settingsFilePath: "",
       appVersion: app.getVersion(),
@@ -192,6 +192,13 @@ class SettingsService {
         );
         process.exit(-1);
     }
+
+    if (profile) {
+      system.appPath = profile.data;
+      system.downloadPath = profile.downloads;
+      system.settingsPath = profile.settings;
+    }
+
     system.settingsFilePath = path.resolve(
       system.settingsPath,
       env.settingsFilename
@@ -284,6 +291,7 @@ class SettingsService {
 
       // settings.system.appVersion was added in >=0.5.5. If it does not exist, we do not want to include the file
       if (settings && settings.system.appVersion) {
+        const pinned = { ...this._all.value.system };
         const merged = lodash.merge(this._all.value, settings);
 
         // Make sure we always have the latest version numbers (otherwise the versions from the file will overwrite actual values)
@@ -292,6 +300,16 @@ class SettingsService {
         merged.system.nodeVersion = process.versions.node;
         merged.system.osPlatform = process.platform;
         merged.system.osVersion = process.getSystemVersion();
+
+        // A profile always owns its storage paths, even if the file says otherwise
+        if (profile) {
+          merged.system.appPath = pinned.appPath;
+          merged.system.downloadPath = pinned.downloadPath;
+          merged.system.settingsPath = pinned.settingsPath;
+          merged.system.settingsFilePath = pinned.settingsFilePath;
+          merged.system.resourcesPath = pinned.resourcesPath;
+        }
+
         this._all.next(merged);
       } else {
         this.warn(
@@ -302,9 +320,25 @@ class SettingsService {
           this._all.next(this._all.value);
         });
       }
-    } catch (e) {
-      console.error("SettingsService - Error - ", e);
-      this.warn("Settings File Does Not Exist", "Creating new settings file.");
+    } catch (e: any) {
+      if (e?.code === "ENOENT") {
+        this.warn(
+          "Settings File Does Not Exist",
+          "Creating new settings file."
+        );
+      } else {
+        // Keep the unreadable file so the user can recover it
+        const backupPath = `${filePath}.unreadable-${Date.now()}`;
+        try {
+          fs.renameSync(filePath, backupPath);
+        } catch (renameError) {
+          console.error("Could not move unreadable settings file", renameError);
+        }
+        this.error(
+          "Settings File Unreadable",
+          `Moved to ${backupPath}. Creating new settings file. ${e}`
+        );
+      }
       if (makeDirectory(this._all.value.system.settingsPath) !== RET_OK) {
         console.error("Exiting with code ", -1);
         process.exit(-1);

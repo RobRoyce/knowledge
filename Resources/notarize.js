@@ -28,6 +28,13 @@ exports.default = async function notarizing(context) {
   const password = process.env.APPLEPWD;
   const teamId = process.env.TEAMID;
 
+  if (!appleId || !password || !teamId) {
+    console.log(
+      "Skipping notarization: set APPLEID, APPLEPWD and TEAMID to notarize."
+    );
+    return;
+  }
+
   return await notarize({
     appBundleId: "com.knowledge.canvas.app",
     appPath: `${appOutDir}/${appName}.app`,

@@ -37,7 +37,7 @@ export default class ApiKeyController {
     try {
       const apiKey = await this.loadApiKey();
       return res.json({
-        apiKeySet: apiKey && apiKey.length > 0,
+        apiKeySet: Boolean(apiKey && apiKey.length > 0),
       });
     } catch {
       return res.json({ apiKeySet: false });

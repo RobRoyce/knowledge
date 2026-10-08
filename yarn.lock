@@ -9205,6 +9205,7 @@ __metadata:
     electron-builder: ^24.6.4
     electron-updater: ^6.1.4
     express-rate-limit: ^6.11.2
+    fs-extra: ^10.1.0
     lodash: ^4.17.21
     mime-types: ^2.1.35
     openai: ^4.25.0
@@ -9270,7 +9271,6 @@ __metadata:
     "@types/uuid": ^9.0.7
     async: ^3.2.5
     axios: ^1.6.5
-    canvas: ^2.11.2
     ejs: ^3.1.9
     electron-builder: ^24.6.4
     electron-notarize: ^1.2.2
@@ -9288,6 +9288,7 @@ __metadata:
     node-forge: ^1.3.1
     node-loader: ^2.0.0
     pdfjs-dist: ^3.11.174
+    playwright-core: ^1.63.0
     plist: ^3.1.0
     postcss: ^8.4.33
     prettier: ^2.8.8
@@ -9295,6 +9296,9 @@ __metadata:
     terser: ^5.27.0
     url: ^0.11.3
     worker-loader: ^3.0.8
+  dependenciesMeta:
+    canvas:
+      built: false
   languageName: unknown
   linkType: soft
 
@@ -11062,6 +11066,15 @@ __metadata:
   dependencies:
     find-up: ^4.0.0
   checksum: 9863e3f35132bf99ae1636d31ff1e1e3501251d480336edb1c211133c8d58906bed80f154a1d723652df1fda91e01c7442c2eeaf9dc83157c7ae89087e43c8d6
+  languageName: node
+  linkType: hard
+
+"playwright-core@npm:^1.63.0":
+  version: 1.63.0
+  resolution: "playwright-core@npm:1.63.0"
+  bin:
+    playwright-core: cli.js
+  checksum: b4c190c4099d0620a9ba22a0e826194ad511c3149153a79c44dc632ac2058da7da01cf66f011ee3ee0f360bbd83aa2f67f04519eb3c7c2bea257c4f598537937
   languageName: node
   linkType: hard
 

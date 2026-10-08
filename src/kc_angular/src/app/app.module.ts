@@ -13,6 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { APP_INITIALIZER } from '@angular/core';
+import { HTTP_INTERCEPTORS } from '@angular/common/http';
+import {
+  BackendAuthInterceptor,
+  BackendService,
+  loadBackend,
+} from '@services/ipc-services/backend.service';
 import { A11yModule } from '@angular/cdk/a11y';
 import { AccordionModule } from 'primeng/accordion';
 import { AppComponent } from '@app/app.component';
@@ -322,6 +329,17 @@ import { CarouselModule } from 'primeng/carousel';
     CarouselModule,
   ],
   providers: [
+    {
+      provide: APP_INITIALIZER,
+      useFactory: loadBackend,
+      deps: [BackendService],
+      multi: true,
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: BackendAuthInterceptor,
+      multi: true,
+    },
     ConfirmationService,
     DialogService,
     IngestService,

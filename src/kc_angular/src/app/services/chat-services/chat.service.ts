@@ -15,6 +15,7 @@
  */
 
 import { AgentType, ChatMessage, MessageRating } from '@app/models/chat.model';
+import { BackendService } from '@services/ipc-services/backend.service';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { KcProject } from '@app/models/project.model';
@@ -51,7 +52,6 @@ export interface ChatTarget {
 })
 export class ChatService {
   // TODO: Make this a configurable setting when backend becomes available as standalone
-  private backendUrl = 'http://localhost:21003';
 
   private canConnect = new BehaviorSubject<boolean>(false);
 
@@ -84,7 +84,8 @@ export class ChatService {
     private factory: ChatFactoryService,
     private http: HttpClient,
     private notify: NotificationsService,
-    private settings: SettingsService
+    private settings: SettingsService,
+    private backend: BackendService
   ) {
     this.checkConnection();
 
@@ -180,8 +181,9 @@ export class ChatService {
       });
   }
 
-  get serverUrl() {
-    return this.backendUrl;
+  /** Chat server of this instance. Empty if the server is unavailable. */
+  private get backendUrl() {
+    return this.backend.chat.url ?? '';
   }
 
   canChat() {
