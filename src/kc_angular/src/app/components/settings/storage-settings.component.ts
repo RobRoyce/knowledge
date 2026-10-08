@@ -14,7 +14,8 @@
  *  limitations under the License.
  */
 
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import type { RestorePreview } from '@contracts/storage';
 import { StorageService } from '@services/ipc-services/storage.service';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { NotificationsService } from '@services/user-services/notifications.service';
@@ -35,10 +36,9 @@ import { SettingsService } from '@services/ipc-services/settings.service';
             <ng-template pTemplate="content">
               <div class="w-full h-full flex flex-column">
                 <div class="mb-3 text-500">
-                  Projects, sources, topics, metadata, and copies of imported
-                  files. Restore it with the storage service command line (see
-                  DEVELOPMENT.md). It does not hold chat history, preferences,
-                  or settings.
+                  Contains projects, sources, topics, metadata, and copies of
+                  imported files. Does not contain chat history, the inbox, UI
+                  preferences, settings, or API keys.
                 </div>
                 <app-setting-template class="w-full" label="Export Library">
                   <div class="settings-input">
@@ -50,6 +50,99 @@ import { SettingsService } from '@services/ipc-services/settings.service';
                     ></button>
                   </div>
                 </app-setting-template>
+
+                <app-setting-template class="w-full" label="Restore Library">
+                  <div class="settings-input">
+                    <input
+                      #restoreUpload
+                      id="restore-library-input"
+                      class="hidden"
+                      (change)="onSelectLibraryBackup($event)"
+                      type="file"
+                      accept=".tar,application/x-tar"
+                    />
+                    <button
+                      pButton
+                      label="Restore Library"
+                      [disabled]="!libraryEmpty || !!preview || restoreBusy"
+                      [loading]="restoreBusy"
+                      (click)="restoreUpload.click()"
+                    ></button>
+                  </div>
+                </app-setting-template>
+
+                <div
+                  *ngIf="refusal"
+                  id="restore-refused"
+                  class="mt-2 p-3 border-round surface-200"
+                >
+                  {{ refusal }}
+                </div>
+
+                <div
+                  *ngIf="preview"
+                  id="restore-preview"
+                  class="mt-3 p-3 border-round surface-200 flex flex-column gap-2"
+                >
+                  <div class="text-lg font-bold">Restore this library?</div>
+                  <div>
+                    Backup created:
+                    {{ preview.backupCreatedAt | date : 'medium' }} (format
+                    version {{ preview.backupVersion }})
+                  </div>
+                  <div id="restore-counts">
+                    {{ count(preview.counts.projects, 'project') }},
+                    {{ count(preview.counts.sources, 'source') }},
+                    {{ count(preview.counts.assets, 'file') }} ({{
+                      preview.counts.bytes / 1024 | number : '1.0-0'
+                    }}
+                    KB)
+                  </div>
+                  <div *ngIf="preview.projectNames.length">
+                    Projects: {{ preview.projectNames.join(', ') }}
+                  </div>
+                  <div *ngFor="let warning of preview.warnings">
+                    Warning: {{ warning }}
+                  </div>
+                  <div id="restore-not-included">
+                    Not in this backup, and not changed:
+                    {{ preview.notIncluded.join(', ') }}.
+                  </div>
+                  <div class="flex gap-2 mt-2">
+                    <button
+                      pButton
+                      id="restore-confirm"
+                      label="Restore"
+                      class="w-auto"
+                      [loading]="restoreBusy"
+                      (click)="onConfirmRestore()"
+                    ></button>
+                    <button
+                      pButton
+                      id="restore-cancel"
+                      label="Cancel"
+                      class="p-button-text w-auto"
+                      [disabled]="restoreBusy"
+                      (click)="onCancelRestore()"
+                    ></button>
+                  </div>
+                </div>
+
+                <div
+                  *ngIf="restoreError"
+                  id="restore-error"
+                  class="mt-2 p-3 border-round surface-200 text-red-400"
+                >
+                  {{ restoreError }}
+                </div>
+
+                <div
+                  *ngIf="restoreResult"
+                  id="restore-result"
+                  class="mt-2 p-3 border-round surface-200"
+                >
+                  {{ restoreResult }}
+                </div>
               </div>
             </ng-template>
           </p-panel>
@@ -103,12 +196,25 @@ import { SettingsService } from '@services/ipc-services/settings.service';
   `,
   styles: [],
 })
-export class StorageSettingsComponent {
+export class StorageSettingsComponent implements OnInit {
   exportType = 'Everything';
 
   exporting = false;
 
   exportingLibrary = false;
+
+  /** Restore is allowed only into a library without records. */
+  libraryEmpty = false;
+
+  refusal = '';
+
+  preview?: RestorePreview;
+
+  restoreBusy = false;
+
+  restoreError = '';
+
+  restoreResult = '';
 
   form: FormGroup;
 
@@ -119,6 +225,108 @@ export class StorageSettingsComponent {
     private settings: SettingsService
   ) {
     this.form = formBuilder.group({});
+  }
+
+  count(n: number, noun: string) {
+    return `${n} ${noun}${n === 1 ? '' : 's'}`;
+  }
+
+  ngOnInit() {
+    this.refreshLibraryStatus();
+  }
+
+  private message(e: any): string {
+    return e?.error?.error?.message ?? e?.message ?? `${e}`;
+  }
+
+  async refreshLibraryStatus() {
+    try {
+      const status = await this.storage.libraryStatus();
+      this.libraryEmpty = status.empty;
+      const c = status.counts;
+      this.refusal = status.empty
+        ? ''
+        : `Restore works only into an empty library. This library has ${this.count(
+            c.projects,
+            'project'
+          )}, ` +
+          `${this.count(c.sources, 'source')}, and ${this.count(
+            c.assets,
+            'file'
+          )}. To restore, start Knowledge with a new ` +
+          'profile. Existing data is not changed or deleted.';
+    } catch (e) {
+      this.libraryEmpty = false;
+      this.refusal = `Library status unavailable: ${this.message(e)}`;
+    }
+  }
+
+  /** Upload the selected file. The service validates it. Nothing changes yet. */
+  async onSelectLibraryBackup($event: any) {
+    const input: HTMLInputElement = $event.target;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    this.restoreError = '';
+    this.restoreResult = '';
+    this.restoreBusy = true;
+    try {
+      this.preview = await this.storage.stageRestore(file);
+    } catch (e) {
+      this.restoreError = `The backup cannot be restored. ${this.message(e)}`;
+      await this.refreshLibraryStatus();
+    } finally {
+      this.restoreBusy = false;
+    }
+  }
+
+  async onConfirmRestore() {
+    if (!this.preview) {
+      return;
+    }
+    this.restoreBusy = true;
+    this.restoreError = '';
+    try {
+      const r = await this.storage.activateRestore(this.preview.id);
+      this.preview = undefined;
+      this.restoreResult =
+        `Restored ${this.count(r.projects, 'project')}, ${this.count(
+          r.sources,
+          'source'
+        )}, ` +
+        `and ${this.count(r.assets, 'file')}. ` +
+        'Knowledge reloads now.';
+      this.notifications.success(
+        'Backup',
+        'Library Restored',
+        this.restoreResult
+      );
+
+      // Reload so every service reads the restored library
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (e) {
+      this.preview = undefined;
+      this.restoreError = `Restore failed. The library is not changed. ${this.message(
+        e
+      )}`;
+      await this.refreshLibraryStatus();
+    } finally {
+      this.restoreBusy = false;
+    }
+  }
+
+  async onCancelRestore() {
+    const id = this.preview?.id;
+    this.preview = undefined;
+    if (id) {
+      try {
+        await this.storage.cancelRestore(id);
+      } catch {
+        // The staged files are removed at the next service start
+      }
+    }
   }
 
   onExport() {

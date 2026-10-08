@@ -124,7 +124,7 @@ test("restore refuses a directory that already has a library", async () => {
 
   const result = cli(["restore", "--data-dir", source, "--from", tar]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /already has a library/);
+  assert.match(result.stderr, /Restore needs an empty library/);
 });
 
 test("a damaged backup is rejected and leaves the target empty", async () => {
@@ -145,7 +145,7 @@ test("a damaged backup is rejected and leaves the target empty", async () => {
   const target = tempDir("bk3-target");
   const result = cli(["restore", "--data-dir", target, "--from", tar]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Hash mismatch/);
+  assert.match(result.stderr, /is damaged/);
 
   const svc2 = await startService(target);
   const api2 = client(svc2);

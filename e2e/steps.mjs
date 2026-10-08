@@ -147,7 +147,39 @@ export async function search(page, query) {
     );
 }
 
+/** Open a Settings section. Settings is a dialog; reuse it if it is open. */
 export async function openSettings(page, section) {
-  await page.locator("i.pi-cog").first().click();
-  await page.locator(".p-menuitem-link", { hasText: section }).click();
+  const item = page.locator(".p-menuitem-link", { hasText: section });
+  if (!(await item.isVisible())) {
+    await page.locator("i.pi-cog").first().click();
+  }
+  await item.click();
+}
+
+/**
+ * Restore a library backup through Settings > Backup. Returns the preview
+ * text that the user sees before confirmation.
+ */
+export async function restoreLibrary(page, tar) {
+  await openSettings(page, "Backup");
+  await page.locator("#restore-library-input").setInputFiles(tar);
+  const preview = page.locator("#restore-preview");
+  await preview.waitFor({ timeout: 60000 });
+  const text = await preview.innerText();
+  await page.locator("#restore-confirm").click();
+  await page.locator("#restore-result").waitFor({ timeout: 60000 });
+  const result = await page.locator("#restore-result").innerText();
+  // The app reloads after a restore
+  await page.waitForEvent("load", { timeout: 15000 });
+  await page.waitForSelector("app-create button", { timeout: 30000 });
+  return { preview: text, result };
+}
+
+/** Upload a library backup that the service must refuse. Returns the error. */
+export async function restoreLibraryError(page, tar) {
+  await openSettings(page, "Backup");
+  await page.locator("#restore-library-input").setInputFiles(tar);
+  const error = page.locator("#restore-error");
+  await error.waitFor({ timeout: 60000 });
+  return error.innerText();
 }

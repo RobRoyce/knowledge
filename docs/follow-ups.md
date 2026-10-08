@@ -1,18 +1,29 @@
 # Follow-up Work
 
-Work found during the recovery and storage milestones. Not started.
+Work found during the recovery, storage, and desktop completion
+milestones. Not started.
 
 ## Storage service
 
 | Item | Reason |
 | --- | --- |
-| Package the service with a Node.js 24 runtime | Packaged builds cannot start the service now. |
-| Restore a library from the UI | Restore needs the command line now. |
-| Orphan asset cleanup policy | Deleting a source keeps its managed file. Only unreferenced files after a rollback or crash are removed. |
+| Orphan asset cleanup policy | Deleting a source keeps its managed file. Only files without records after a rollback, crash, or failed restore are removed. |
+| Restore into a library that has records (merge or replace) | Restore refuses a non-empty library now. |
 | Move the extracted-text cache into the service | The chat server keeps it in `data/storage/sources/`, outside the library. |
 | Thumbnails in the service | Electron makes thumbnails from a local copy of the managed file. |
 | Move favicon cache, inbox, and chat history out of local storage | They stay in the renderer for this milestone. |
 | Remove `kc_shared` dependency on Angular models | `kc_shared/models/project.model.ts` imports an Angular model. Electron needs the `@shared` alias because of it. |
+| Stronger local access control | The token stops requests without it. Programs that run as the same OS user can read it. |
+
+## Packaging and release
+
+| Item | Reason |
+| --- | --- |
+| Signing and notarization | Not verified. Signing must include the bundled `node` binary. V8 may need the `allow-jit` entitlement under the hardened runtime. |
+| macOS x64 package | A pinned runtime hash exists. The build is not tested. |
+| Linux and Windows packages | No runtime configuration. Not tested. |
+| Smaller package | The bundled Node.js adds about 120 MB. |
+| Stop electron-builder rebuilding `canvas` | The app does not use `canvas`. The rebuild works now but is not needed. |
 
 ## Desktop app
 
@@ -25,10 +36,10 @@ Work found during the recovery and storage milestones. Not started.
 | Root `postinstall` key is outside `scripts` | It never runs. Remove it or move it. |
 | Fresh-profile route error (`inbox/undefined`) | Cosmetic error in the log on first start. |
 | PDF viewer title shows the blob ID | Managed PDFs open from a `blob:` URL. |
+| Select a project after a library restore | After restore, no project is selected. The user selects one in the tree. |
 
 ## Features (separate tasks)
 
 - Full-text search over extracted text.
 - Notes editor for the existing `notes` field.
 - Verification of AI chat with a real API key.
-- Signed and notarized release builds.

@@ -280,12 +280,18 @@ export class Library {
     return new Set(rows.map((r) => r.id));
   }
 
-  isEmpty(): boolean {
-    const row = this.db
+  counts(): { projects: number; sources: number; assets: number } {
+    return this.db
       .prepare(
-        "SELECT (SELECT COUNT(*) FROM projects) + (SELECT COUNT(*) FROM sources) + (SELECT COUNT(*) FROM assets) AS n"
+        `SELECT (SELECT COUNT(*) FROM projects) AS projects,
+                (SELECT COUNT(*) FROM sources) AS sources,
+                (SELECT COUNT(*) FROM assets) AS assets`
       )
-      .get() as { n: number };
-    return row.n === 0;
+      .get() as { projects: number; sources: number; assets: number };
+  }
+
+  isEmpty(): boolean {
+    const c = this.counts();
+    return c.projects + c.sources + c.assets === 0;
   }
 }

@@ -11,10 +11,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import {
   FIXTURES,
-  REPO,
   captureDownloads,
   close,
   launch,
@@ -155,20 +153,16 @@ test(
       await close(ctx);
       ctx = undefined;
 
-      // Restore into the storage directory of a new profile, then open it
-      const restored = spawnSync(
-        process.execPath,
-        [
-          path.join(REPO, "src/kc_storage/src/main.ts"),
-          "restore",
-          "--data-dir",
-          path.join(profileB, "data", "library"),
-          "--from",
-          tar,
-        ],
-        { encoding: "utf8" }
+      // Restore through the UI into a new profile, then restart and open it
+      ctx = await launch(profileB, log);
+      const restore = await ui.restoreLibrary(ctx.page, tar);
+      assert.match(restore.preview, /1 project, 3 sources, 2 files/);
+      assert.match(
+        restore.result,
+        /Restored 1 project, 3 sources, and 2 files/
       );
-      assert.equal(restored.status, 0, restored.stderr);
+      await close(ctx);
+      ctx = undefined;
 
       ctx = await launch(profileB, log);
       await ui.selectProject(ctx.page, PROJECT);

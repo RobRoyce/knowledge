@@ -39,18 +39,37 @@ export function newRun(name) {
 }
 
 /** Launch the app with the given profile directory. */
-export async function launch(profileDir, logFile, env = {}) {
+/**
+ * Launch the app with the given profile directory.
+ *
+ * options.packaged: path to a packaged Knowledge.app. The app then gets
+ * only options.env (no inherited variables) and runs in options.cwd.
+ */
+export async function launch(profileDir, logFile, env = {}, options = {}) {
   if (!profileDir) {
     throw new Error("launch() needs an explicit profile directory");
   }
   const log = fs.createWriteStream(logFile, { flags: "a" });
-  const app = await electron.launch({
-    executablePath: ELECTRON,
-    args: [REPO],
-    cwd: REPO,
-    env: { ...appEnv(), ...env, KC_PROFILE_DIR: profileDir },
-    timeout: 60000,
-  });
+  const app = await electron.launch(
+    options.packaged
+      ? {
+          executablePath: path.join(
+            options.packaged,
+            "Contents/MacOS/Knowledge"
+          ),
+          args: [],
+          cwd: options.cwd,
+          env: { ...env, KC_PROFILE_DIR: profileDir },
+          timeout: 60000,
+        }
+      : {
+          executablePath: ELECTRON,
+          args: [REPO],
+          cwd: REPO,
+          env: { ...appEnv(), ...env, KC_PROFILE_DIR: profileDir },
+          timeout: 60000,
+        }
+  );
   app.process().stdout?.on("data", (d) => log.write(`[main] ${d}`));
   app.process().stderr?.on("data", (d) => log.write(`[main:err] ${d}`));
   const page = await app.firstWindow();

@@ -84,6 +84,10 @@ Base: `http://127.0.0.1:<port>`. All `/v1` routes need
 | `GET /v1/assets/:id` | Asset metadata |
 | `GET /v1/assets/:id/content` | File bytes |
 | `GET /v1/backup` | Portable backup (tar) |
+| `GET /v1/library` | Record counts and whether the library is empty |
+| `POST /v1/restores` | Upload and validate a backup. Returns a preview. Nothing changes yet. |
+| `POST /v1/restores/:id/activate` | Make the validated backup active (empty library only) |
+| `DELETE /v1/restores/:id` | Discard a validated backup |
 
 Errors use `{ "error": { "code", "message" } }` and a matching HTTP status.
 
@@ -93,7 +97,11 @@ Errors use `{ "error": { "code", "message" } }` and a matching HTTP status.
 - Token from the `KC_STORAGE_TOKEN` environment variable. Required.
 - The `Host` header must be `127.0.0.1:<port>` or `localhost:<port>`.
 - CORS allows only the configured origin (`null` for the desktop renderer).
-  CORS and loopback are not authentication. The token is.
+  CORS and loopback are not authentication.
+- The token stops requests that do not have it. It does not stop programs
+  that run as the same operating-system user: they can read the token from
+  the service's environment or read the data directory directly. The
+  access boundary is the operating-system user account.
 - No route takes a filesystem path. Asset IDs must match a strict pattern.
 - One process per data directory (lock file).
 
@@ -111,8 +119,11 @@ Errors use `{ "error": { "code", "message" } }` and a matching HTTP status.
 
 ## Desktop connection
 
-Electron main starts `node src/kc_storage/src/main.ts serve` with
-`--data-dir <profile>/data/library`, port `0`, and a new token. The service prints
+Electron main starts `<node> <kc_storage>/src/main.ts serve` with
+`--data-dir <profile>/data/library`, port `0`, and a new token. A packaged
+app uses the bundled runtime in `Contents/Resources/node/bin/node` and the
+service files in `Contents/Resources/kc_storage` (see
+[desktop-storage-completion.md](desktop-storage-completion.md)). The service prints
 one JSON line with its URL. The renderer receives the URL and token through
 `A2E:Backend:Info`. If the service does not start, the app shows an error
 and quits. The service stops when its standard input closes.
@@ -144,7 +155,11 @@ or delete the data directory. The renderer data is not changed by migration.
 - `GET /v1/backup` or `backup --data-dir <dir> --out <file.tar>`.
 - Tar file: `manifest.json` (format `knowledge-library-backup`, version 1,
   projects, sources, assets with SHA-256) and `assets/<id>`.
-- `restore --data-dir <empty dir> --from <file.tar>` checks every hash.
+- Restore into an empty library through the API (`POST /v1/restores`, then
+  `POST /v1/restores/<id>/activate`), Settings > Backup, or
+  `restore --data-dir <dir> --from <file.tar>`. All use the same staged
+  validation and activation. See
+  [desktop-storage-completion.md](desktop-storage-completion.md).
 - Not included: chat history, UI preferences, settings, API key, text cache.
 
 ## UI workflow

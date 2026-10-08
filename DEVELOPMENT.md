@@ -8,15 +8,19 @@ You do not need AWS, an Apple developer account, or an AI API key.
 | Tool | Version | Notes |
 | --- | --- | --- |
 | macOS | 26.6 (arm64) | Verified. Linux and Windows are not verified. |
-| Node.js | 24.21.0 | Verified. The app starts the storage service with this Node.js. |
+| Node.js | 24.21.0 | Verified. Development builds, tests, and the unpackaged app use it. |
 | Yarn | 3.2.4 | The repository contains this version (`.yarnrc.yml` `yarnPath`). Any global `yarn` starts it. |
 | Electron | 26.3.0 | Installed by Yarn. |
 
 No native compiler is necessary. The install does not build `canvas`.
 
 The storage service (`src/kc_storage`) needs Node.js 24 or later. It uses
-the built-in `node:sqlite` module. The desktop app starts it with `node`
-from `PATH`. To use a different binary, set `KC_NODE=/path/to/node`.
+the built-in `node:sqlite` module.
+
+| Run | Node.js for the storage service |
+| --- | --- |
+| Unpackaged (`yarn start`) | `node` from `PATH`, or `KC_NODE=/path/to/node` |
+| Packaged app | Bundled Node.js 24.21.0 in `Contents/Resources/node/bin/node`. `PATH` and `KC_NODE` are not used. |
 
 Compatibility note: Angular 14 officially supports Node.js 14.15+ and 16.10+ only.
 Node.js 24 builds and runs this branch, but it is outside the official range.
@@ -60,10 +64,21 @@ The app does not read or write the old local-storage project keys
 ## Instances and local servers
 
 Each instance starts two local servers: the chat server (Electron) and the
-storage service (Node.js). Each listens on a random loopback port and
-requires its own random token. The renderer receives the addresses and
-tokens through IPC (`A2E:Backend:Info`). One instance cannot use the
-servers of another instance.
+storage service (Node.js). Each listens on a random port on `127.0.0.1`
+and requires its own random bearer token. The renderer receives the
+addresses and tokens through IPC (`A2E:Backend:Info`).
+
+### Access boundary
+
+- Verified: a request without the correct token gets `401`. The window of
+  one instance does not know the address or token of another instance, so
+  it cannot use the other instance's servers by mistake.
+- Verified: the servers do not accept connections from other computers.
+- Not protected: other programs that run as the same macOS user. Such a
+  program can read the token (for example, from the storage service's
+  environment, `KC_STORAGE_TOKEN`), or read the profile files directly.
+  The real boundary is the operating-system user account.
+- The browser extension server (port 9000, off by default) has no token.
 
 Only one instance can use a profile at a time. A second start with the same
 profile prints a message and exits. Different profiles can run at the same time.
@@ -194,35 +209,62 @@ do not change them. Changes made after the migration are not in them.
 
 ## Backup and restore
 
-Settings > Backup has two backups. Neither is a complete application backup.
+Settings > Backup has two separate backups. Neither is a complete
+application backup.
 
-| Backup | Contents | Restore |
-| --- | --- | --- |
-| Library (`knowledge-library-<date>.tar`) | Projects, sources, topics, metadata, managed files with SHA-256 hashes | `yarn storage restore` into an empty data directory |
-| Chat and preferences (`knowledge-backup-<date>.json`) | Renderer local storage: chat history, inbox, UI preferences | Settings > Backup > Restore |
+| Backup | Contains | Does not contain | Restore |
+| --- | --- | --- | --- |
+| Library (`knowledge-library-<date>.tar`) | Projects, sources, topics, metadata, copies of imported files (SHA-256 for each) | Chat history, inbox, UI preferences, settings, API keys, extracted-text cache | Settings > Backup > Restore Library, or `yarn storage restore` |
+| Chat and preferences (`knowledge-backup-<date>.json`) | Renderer local storage: chat history, inbox, UI preferences | Projects, sources, files, settings | Settings > Backup > Restore |
 
-Not in either backup: settings, the API key, the extracted-text cache.
-File sources without a managed copy (missing at migration) still depend on
-the original path.
+### Restore a library in the app
 
-To restore a library into a new profile:
+1. Start Knowledge with a new, empty profile. For example:
+   `KC_PROFILE_DIR=/path/to/new-profile yarn start`.
+2. Open Settings > Backup.
+3. Select Restore Library and choose the `.tar` file.
+4. Read the preview: date, counts, project names, warnings, and the data
+   that is not in the backup.
+5. Select Restore. Knowledge shows the result and reloads.
+
+The restored library does not need the original files.
+
+Restore works only into an empty library. An empty library can have a
+database file. If the library has projects, sources, or files, the app
+shows the counts and refuses. It never replaces, merges, or deletes data.
+
+The storage service does all checks before anything changes:
+
+- Format `knowledge-library-backup`, supported version (1).
+- Archive entries: only `manifest.json` and `assets/<asset ID>`, regular
+  files only. Other names, links, and entry types are refused.
+- Records, duplicate IDs, project and file references, sizes, and the
+  SHA-256 of every file.
+- Limits: archive 8 GiB, manifest 64 MiB, 1,000,000 entries, 2 GiB for
+  each file.
+
+Then it activates the restore in one step. If the step fails, or if the
+process stops during it, the library stays empty. Unused staging files are
+removed at the next start. A library restore does not change chat history
+or preferences.
+
+### Restore from the command line
 
 ```sh
 yarn storage restore --data-dir <new profile>/data/library --from knowledge-library-<date>.tar
-KC_PROFILE_DIR=<new profile> yarn start
 ```
 
-Restore checks every file hash and refuses a directory that already has a
-library. The restored library does not need the original files.
+Stop the app first. The command uses the same checks as the app.
 
 ## Tests
 
 | Command | Checks | Needs |
 | --- | --- | --- |
 | `yarn test` | Renderer backup, profile path isolation | Node.js 22.18+ |
-| `yarn test-storage` | Storage service without Electron: persistence, files, validation and access limits, migration (repeat, missing files, failure, rollback), backup and restore | Node.js 24+ |
+| `yarn test-storage` | Storage service without Electron: persistence, files, validation and access limits, migration (repeat, missing files, failure, rollback), backup, restore (API and command line, non-empty refusal, unsupported version, missing and damaged files, unsafe archive entries, failure and process stop during activation) | Node.js 24+ |
 | `yarn workspace kc_storage typecheck` | Storage service types (TypeScript 5) | |
 | `yarn e2e` | Desktop UI with real profiles (below) | macOS, `yarn build-dev` first |
+| `yarn e2e-packaged` | The unsigned package (below) | macOS arm64, `yarn package-local` first |
 
 The end-to-end tests start the real app with new, empty profiles in
 `e2e/.output/<run>/`. They never use your normal profile.
@@ -231,10 +273,23 @@ The end-to-end tests start the real app with new, empty profiles in
   import a PDF and a text file, annotate, search, restart, delete the
   original files, read the same records and files, show the PDF, make a
   thumbnail and extract text from the managed copy, export the library,
-  restore it into a second profile, and show the PDF there.
+  restore it into a second profile through Settings > Backup, and show the
+  PDF there.
 - `e2e/isolation.e2e.mjs`: two profiles at the same time get different chat
   and storage addresses and tokens. Each server rejects the other
   instance's requests. A second start of the same profile exits.
+
+- `e2e/packaged/packaged.e2e.mjs`: copies `dist/mac-arm64/Knowledge.app`
+  to a temporary directory and runs it with scratch profiles, a working
+  directory outside the repository, only `HOME`, `TMPDIR`, and
+  `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (no Node.js, no credentials). It
+  checks that the service command line uses the bundled runtime, then runs
+  the full workflow: create, link, import, annotate, restart, export,
+  delete the originals, restore through the UI into a second profile,
+  restart, and open the files. It also checks an unsupported backup
+  version, the refusal for a non-empty library, unchanged chat history,
+  two instances at the same time, and that no service process remains.
+  Output stays in `$TMPDIR/kc-packaged-*`. The test removes the app copy.
 
 Test files are in `e2e/fixtures/`. To delete old test output, delete
 `e2e/.output/`.
@@ -254,16 +309,18 @@ curl -s -X POST http://127.0.0.1:7777 -d '{"op":"close"}'
   no notes editor. The `notes` field is kept but not shown.
 - Search uses titles, topics, descriptions, and source type. It does not
   search file content.
-- The library backup includes managed files. Restore needs the storage
-  service command line. The UI cannot restore a library.
+- Library restore works only into an empty library.
+- Chat history, UI preferences, and settings are separate from the library
+  and its backup.
 - A file source that had no original file at migration has no managed copy.
   It still depends on its original path.
-- Packaged builds cannot start the storage service. The package does not
-  contain `src/kc_storage` or a Node.js 24 runtime. Not tested on this
-  branch. A packaged app is expected to show the start error and quit.
-- Signed and notarized releases are not verified.
+- Packaging is verified only for macOS arm64 (unsigned). A pinned runtime
+  hash exists for macOS x64, but that build is not tested. Linux and
+  Windows packages have no runtime configuration.
+- Signed and notarized releases are not verified. Signing must also sign
+  the bundled Node.js binary.
 - AI chat with a real API key is not verified.
-- Only macOS is verified.
+- Electron 26 and Angular 14 are outside their supported versions.
 
 Follow-up work is in [docs/follow-ups.md](docs/follow-ups.md).
 
@@ -285,14 +342,39 @@ plain text.
 ## Packaging
 
 ```sh
-CSC_IDENTITY_AUTO_DISCOVERY=false yarn run pack
+yarn package-local
 ```
 
-Use `yarn run pack`. The command `yarn pack` is a Yarn built-in. It makes an
-npm archive and does not start electron-builder.
+This command does these steps:
 
-The result is an unsigned app in `dist/mac-arm64`. Notarization starts only
-when `APPLEID`, `APPLEPWD`, and `TEAMID` are set. Signing needs a valid
-Developer ID certificate. See the packaging limit above.
+1. `yarn build`: production builds of Angular and Electron.
+2. `yarn prepare-runtime`: downloads the official Node.js 24.21.0 archive
+   for this computer (`darwin-arm64`) from `nodejs.org`, checks the pinned
+   SHA-256 and the upstream `SHASUMS256.txt`, and extracts `bin/node` and
+   `LICENSE` to `vendor/node/darwin-arm64/`. It needs the network only the
+   first time. Git ignores `vendor/`.
+3. electron-builder without signing (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
+
+The result is an unsigned app in `dist/mac-arm64/Knowledge.app` (about
+440 MB). It contains, outside `app.asar`:
+
+| Path in `Contents/Resources` | Contents |
+| --- | --- |
+| `node/bin/node`, `node/LICENSE` | Node.js runtime and its license notices |
+| `kc_storage/` | Storage service source |
+| `kc_contracts/` | API contracts |
+
+The packaged app uses the normal per-user data locations unless
+`KC_PROFILE_DIR` is set. For tests, always set `KC_PROFILE_DIR`.
+
+To change the runtime version, edit `VERSION` and `PINNED_SHA256` in
+`scripts/prepare-node-runtime.mjs`. Take the hashes from
+`https://nodejs.org/dist/v<version>/SHASUMS256.txt`.
+
+Use `yarn package-local` or `yarn run pack`. The command `yarn pack` is a
+Yarn built-in that makes an npm archive.
+
+Notarization starts only when `APPLEID`, `APPLEPWD`, and `TEAMID` are set.
+Signing needs a valid Developer ID certificate. Neither is verified.
 
 Do not use `yarn publish`. Its target S3 bucket does not exist.

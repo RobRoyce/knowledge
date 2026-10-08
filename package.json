@@ -27,6 +27,8 @@
     "clean": "rm -rf dist && yarn workspaces foreach run clean",
     "purge": "yarn workspaces foreach run purge && rm -rf node_modules && yarn cache clean",
     "pack": "electron-builder --dir",
+    "prepare-runtime": "node scripts/prepare-node-runtime.mjs",
+    "package-local": "yarn build && yarn prepare-runtime && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
     "dist": "electron-builder --publish never --x64 --arm64",
     "dist-all": "electron-builder -mwl --x64 --arm64 --publish never",
     "interactive-upgrade": "yarn upgrade-interactive",
@@ -39,6 +41,7 @@
     "start-debug": "electron . --inspect=5858",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/*.test.mts\"",
     "e2e": "node --test --test-concurrency=1 \"e2e/*.e2e.mjs\"",
+    "e2e-packaged": "node --test --test-concurrency=1 \"e2e/packaged/*.e2e.mjs\"",
     "storage": "node src/kc_storage/src/main.ts",
     "test-storage": "yarn workspace kc_storage test",
     "watch-main": "cd src/kc_angular && yarn run watch-main",
@@ -122,6 +125,23 @@
       {
         "from": "node_modules/@dqbd/tiktoken/tiktoken_bg.wasm",
         "to": "tiktoken_bg.wasm"
+      },
+      {
+        "from": "src/kc_storage",
+        "to": "kc_storage",
+        "filter": [
+          "package.json",
+          "src/**/*.ts"
+        ]
+      },
+      {
+        "from": "src/kc_contracts",
+        "to": "kc_contracts",
+        "filter": [
+          "package.json",
+          "*.ts",
+          "!*.d.ts"
+        ]
       }
     ],
     "publish": {
@@ -139,7 +159,17 @@
         "dmg",
         "zip"
       ],
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "extraResources": [
+        {
+          "from": "vendor/node/darwin-${arch}/bin/node",
+          "to": "node/bin/node"
+        },
+        {
+          "from": "vendor/node/darwin-${arch}/LICENSE",
+          "to": "node/LICENSE"
+        }
+      ]
     },
     "linux": {
       "target": [
