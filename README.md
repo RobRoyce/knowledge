@@ -1,3 +1,10 @@
+> [!Note]
+> Knowledge is no longer being developed. Feel free to reach out if you have any questions!
+
+Knowledge is a tool for saving, searching, accessing, exploring and chatting with all of your favorite websites, documents and files.
+
+![KnowledgeGraph](https://user-images.githubusercontent.com/19367848/206884085-f73affb8-b94e-4039-beb3-b47f76762d8b.gif)
+
 # Introducing Knowledge + Chat
 
 Dive into a more interactive learning experience with Knowledge's new Chat feature! Engage in dynamic conversations with your Projects and Sources, leveraging the power of Large Language Models. Ask questions, explore concepts, and deepen your understanding, all within an intuitive chat interface.
@@ -12,13 +19,6 @@ Unleash the power of context with the built-in Chromium browser (just like Googl
 
 ![Browser View](https://github.com/KnowledgeCanvas/knowledge/assets/19367848/d525917e-38e7-4759-aadc-aa9a52ef88a1)
 
-
-
-# Description
-
-Knowledge is a tool for saving, searching, accessing, exploring and chatting with all of your favorite websites, documents and files.
-
-![KnowledgeGraph](https://user-images.githubusercontent.com/19367848/206884085-f73affb8-b94e-4039-beb3-b47f76762d8b.gif)
 
 # Download
 
