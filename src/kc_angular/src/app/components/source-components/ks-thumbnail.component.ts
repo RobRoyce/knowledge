@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import {
   Component,
   Input,
@@ -80,7 +81,8 @@ export class KsThumbnailComponent implements OnDestroy, OnChanges {
   constructor(
     private ipcService: ElectronIpcService,
     private settings: SettingsService,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private platform: Platform
   ) {
     this.animate = settings.get().display.animations;
   }
@@ -140,6 +142,11 @@ export class KsThumbnailComponent implements OnDestroy, OnChanges {
         : this.ks.accessLink.href;
 
     if (this.ks.ingestType === 'file') {
+      // File thumbnails come from the operating system (desktop only)
+      if (!this.platform.has('fileThumbnails')) {
+        this._thumbnail$.next(undefined);
+        return;
+      }
       this.ipcService.getFileThumbnail([
         {
           path: link,

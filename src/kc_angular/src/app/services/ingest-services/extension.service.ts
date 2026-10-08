@@ -28,7 +28,7 @@ export class ExtensionService {
     import: 'E2A:Extension:Import',
   };
 
-  private receive = window.api.receive;
+  private receive = window.api?.receive ?? (() => undefined);
 
   private __links = new BehaviorSubject<
     Partial<WebSourceModel & KnowledgeSource>

@@ -19,7 +19,7 @@ import { KnowledgeSource } from './knowledge.source.model';
 import { UUID } from '@shared/models/uuid.model';
 import { PrimeIcons } from 'primeng/api';
 
-export class KcProject implements KcProjectModel {
+export class KcProject implements KcProjectModel<KnowledgeSource> {
   readonly id: UUID;
   name = '';
   authors: string[] = [];

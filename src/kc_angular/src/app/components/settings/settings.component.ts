@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
 import { Component } from '@angular/core';
 import { MenuItem } from 'primeng/api';
 
@@ -52,6 +53,15 @@ import { MenuItem } from 'primeng/api';
   ],
 })
 export class SettingsComponent {
+  constructor(private platform: Platform) {
+    // Import (watched folders, extensions) and Chat are desktop features
+    this.modules = this.modules.filter(
+      (m) =>
+        (m.label !== 'Import' || platform.has('importSettings')) &&
+        (m.label !== 'Chat' || platform.has('chat'))
+    );
+  }
+
   modules: MenuItem[] = [
     {
       label: 'Display',

@@ -32,8 +32,8 @@ type FileManagerMove = {
   providedIn: 'root',
 })
 export class AutoscanService {
-  private send = window.api.send;
-  private receive = window.api.receive;
+  private send = window.api?.send ?? (() => undefined);
+  private receive = window.api?.receive ?? (() => undefined);
   private channels = {
     fmNewFiles: 'E2A:FileManager:NewFiles',
     fmError: 'E2A:FileManager:Error',

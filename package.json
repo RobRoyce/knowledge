@@ -43,6 +43,8 @@
     "e2e": "node --test --test-concurrency=1 \"e2e/*.e2e.mjs\"",
     "e2e-packaged": "node --test --test-concurrency=1 \"e2e/packaged/*.e2e.mjs\"",
     "storage": "node src/kc_storage/src/main.ts",
+    "browser": "node scripts/start-browser.mjs",
+    "e2e-browser": "node --test --test-concurrency=1 \"e2e/browser/*.e2e.mjs\"",
     "test-storage": "yarn workspace kc_storage test",
     "watch-main": "cd src/kc_angular && yarn run watch-main",
     "watch-main-dev": "cd src/kc_angular && yarn run watch-main-dev",

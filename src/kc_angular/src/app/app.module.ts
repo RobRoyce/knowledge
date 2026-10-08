@@ -18,8 +18,33 @@ import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import {
   BackendAuthInterceptor,
   BackendService,
+  BrowserBackendService,
+  DesktopBackendService,
   initializeBackend,
 } from '@services/ipc-services/backend.service';
+import { isDesktop } from '@app/platform/platform';
+import {
+  BrowserSettingsStore,
+  DesktopSettingsStore,
+  SettingsStore,
+} from '@app/platform/settings-store';
+import {
+  BrowserWindowControls,
+  DesktopWindowControls,
+  WindowControls,
+} from '@app/platform/window-controls';
+import {
+  BrowserNativeFiles,
+  DesktopNativeFiles,
+  NativeFiles,
+} from '@app/platform/native-files';
+import {
+  BrowserManagedFiles,
+  DesktopManagedFiles,
+  ManagedFiles,
+} from '@app/platform/managed-files';
+
+const DESKTOP = isDesktop();
 import { StorageService } from '@services/ipc-services/storage.service';
 import { A11yModule } from '@angular/cdk/a11y';
 import { AccordionModule } from 'primeng/accordion';
@@ -340,6 +365,30 @@ import { CarouselModule } from 'primeng/carousel';
       provide: HTTP_INTERCEPTORS,
       useClass: BackendAuthInterceptor,
       multi: true,
+    },
+    // Platform capabilities: desktop (Electron preload present) or browser
+    {
+      provide: BackendService,
+      useClass: DESKTOP ? DesktopBackendService : BrowserBackendService,
+    },
+    {
+      provide: SettingsStore,
+      useFactory: () =>
+        DESKTOP ? new DesktopSettingsStore() : new BrowserSettingsStore(),
+    },
+    {
+      provide: WindowControls,
+      useFactory: () =>
+        DESKTOP ? new DesktopWindowControls() : new BrowserWindowControls(),
+    },
+    {
+      provide: NativeFiles,
+      useFactory: () =>
+        DESKTOP ? new DesktopNativeFiles() : new BrowserNativeFiles(),
+    },
+    {
+      provide: ManagedFiles,
+      useClass: DESKTOP ? DesktopManagedFiles : BrowserManagedFiles,
     },
     ConfirmationService,
     DialogService,

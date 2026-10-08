@@ -259,3 +259,51 @@ export class ChatSettingsModel {
 
   model: ChatModel = SupportedChatModels[0];
 }
+
+export interface DefaultSettingsInput {
+  env: EnvironmentSettingsModel;
+  system: SystemSettingsModel;
+  /** Managed storage root (desktop). Empty in a browser. */
+  storagePath: string;
+  /** Browser extension server files (desktop). Empty in a browser. */
+  extensionsPath: string;
+  /** Watched folder (desktop). Empty in a browser. */
+  autoscanPath: string;
+}
+
+/**
+ * Default settings. Electron and the browser client both use this, so the
+ * settings have one shape on all platforms.
+ */
+export function createDefaultSettings(
+  input: DefaultSettingsInput
+): SettingsModel {
+  return {
+    env: input.env,
+    system: input.system,
+    app: {
+      table: new TableSettingsModel(),
+      grid: new GridSettingsModel(),
+      calendar: new CalendarSettingsModel(),
+      projects: new ProjectSettingsModel(),
+      graph: new GraphSettingsModel(),
+      chat: new ChatSettingsModel(),
+    },
+    display: {
+      theme: new KcTheme(),
+      syncTheme: true,
+      logging: new LoggingSettingsModel(),
+      zoom: 100,
+      autoplay: true,
+      animations: true,
+    },
+    docker: new DockerSettingsModel(),
+    ingest: {
+      manager: new FileManagerSettingsModel(input.storagePath),
+      extensions: new ExtensionServerSettingsModel(input.extensionsPath),
+      autoscan: new AutoscanSettingsModel(input.autoscanPath),
+    },
+    search: new SearchSettingsModel(),
+    user: new UserSettingsModel(),
+  };
+}

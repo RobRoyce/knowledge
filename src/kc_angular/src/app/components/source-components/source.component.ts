@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import {
   Component,
   ComponentRef,
@@ -219,7 +220,7 @@ export class SourceComponent implements OnInit, OnChanges {
 
   private componentRef?: ComponentRef<any>;
 
-  constructor(private chat: ChatService) {
+  constructor(private chat: ChatService, private platform: Platform) {
     this.chat.loading$.subscribe((loading: boolean) => {
       this.chatTab.loading = loading;
     });
@@ -248,6 +249,9 @@ export class SourceComponent implements OnInit, OnChanges {
   }
 
   views(source: KnowledgeSource) {
+    // Desktop-only views
+    this.chatTab.disabled = this.chatTab.hidden = !this.platform.has('chat');
+
     // If video, enable video tab and disable document tab
     if (source.ingestType === 'website') {
       source.accessLink = new URL(source.accessLink);
@@ -257,11 +261,13 @@ export class SourceComponent implements OnInit, OnChanges {
         source.accessLink.hostname === 'www.youtube.com' &&
         source.accessLink.searchParams.get('v')
       ) {
-        this.browserTab.disabled = this.browserTab.hidden = false;
+        this.browserTab.disabled = this.browserTab.hidden =
+          !this.platform.has('embeddedBrowser');
         this.videoTab.disabled = this.videoTab.hidden = false;
         return;
       } else {
-        this.browserTab.disabled = this.browserTab.hidden = false;
+        this.browserTab.disabled = this.browserTab.hidden =
+          !this.platform.has('embeddedBrowser');
         this.videoTab.disabled = this.videoTab.hidden = true;
         return;
       }
@@ -271,11 +277,16 @@ export class SourceComponent implements OnInit, OnChanges {
       this.documentTab.disabled = this.documentTab.hidden = true;
 
       // If document, enable document table and disable video tab
-      if (
+      const type = source.reference?.source?.file?.type ?? '';
+      const viewable =
         `${source.accessLink}`.endsWith('pdf') ||
         `${source.accessLink}`.endsWith('gif') ||
-        `${source.accessLink}`.endsWith('jpg')
-      ) {
+        `${source.accessLink}`.endsWith('jpg') ||
+        (!!source.assetId &&
+          (type === 'application/pdf' ||
+            type.startsWith('text/plain') ||
+            ['image/png', 'image/jpeg', 'image/gif'].includes(type)));
+      if (viewable) {
         this.documentTab.disabled = this.documentTab.hidden = false;
         return;
       }

@@ -46,6 +46,14 @@ import {
   validSource,
 } from "./validate.ts";
 import { VERSION } from "./version.ts";
+import {
+  equalSecrets,
+  readCookie,
+  SessionStore,
+  type Session,
+  type SessionOptions,
+} from "./sessions.ts";
+import { createWebUi } from "./webui.ts";
 
 /** How long a validated restore waits for confirmation. */
 const RESTORE_PENDING_MS = 30 * 60 * 1000;
@@ -53,10 +61,61 @@ const RESTORE_PENDING_MS = 30 * 60 * 1000;
 export interface ServerOptions {
   dir: DataDir;
   token: string;
-  /** Value of the Origin header that may use the API. "null" for file:// pages. */
+  /** Other origins that may read responses (CORS). "null" for file:// pages. */
   allowedOrigins: string[];
   maxJsonBytes?: number;
   maxUploadBytes?: number;
+  /** Serve the browser UI from this directory and enable browser sessions. */
+  webRoot?: string;
+  sessionOptions?: SessionOptions;
+}
+
+const CSRF_HEADER = "x-knowledge-csrf";
+const UNSAFE_METHODS = ["POST", "PUT", "DELETE", "PATCH"];
+
+/** Managed file types that a browser may show inline. */
+const INLINE_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+];
+
+/**
+ * Response headers for a managed file. Imported content must not run with
+ * the application's origin: only PDF, raster images, and text show inline.
+ * Text is always served as text/plain. Other files are downloads. All
+ * files except PDF get a sandbox CSP.
+ */
+export function contentHeaders(asset: {
+  mediaType: string;
+  size: number;
+  filename: string;
+}) {
+  const name = encodeURIComponent(asset.filename);
+  const isText =
+    asset.mediaType.startsWith("text/") &&
+    !["text/html", "text/xml"].includes(asset.mediaType);
+  const inline = INLINE_TYPES.includes(asset.mediaType) || isText;
+  const headers: Record<string, string | number> = {
+    "Content-Type": isText
+      ? "text/plain; charset=utf-8"
+      : inline
+      ? asset.mediaType
+      : "application/octet-stream",
+    "Content-Length": asset.size,
+    "Content-Disposition": `${
+      inline ? "inline" : "attachment"
+    }; filename*=UTF-8''${name}`,
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+  };
+  if (asset.mediaType !== "application/pdf") {
+    headers["Content-Security-Policy"] =
+      "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
+  }
+  return headers;
 }
 
 const ALLOWED_HEADERS = [
@@ -115,6 +174,8 @@ export function createServer(options: ServerOptions): http.Server {
   const { library, assets } = dir;
   const maxJson = options.maxJsonBytes ?? 10 * 1024 * 1024;
   const maxUpload = options.maxUploadBytes ?? 2 * 1024 ** 3;
+  const webUi = options.webRoot ? createWebUi(options.webRoot) : undefined;
+  const sessions = webUi ? new SessionStore(options.sessionOptions) : undefined;
 
   // A validated restore waits here for confirmation. One at a time.
   let pending: { staged: StagedRestore; timer: NodeJS.Timeout } | undefined;
@@ -151,6 +212,102 @@ export function createServer(options: ServerOptions): http.Server {
     await pipeline(req, meter, fs.createWriteStream(file, { flags: "wx" }));
   }
 
+  const port = () => (server.address() as AddressInfo).port;
+
+  /** Cookie names are per port: browsers share 127.0.0.1 cookies across ports. */
+  const cookieName = () => `kc_session_${port()}`;
+
+  /** The origin of this service, as the browser addressed it. */
+  const ownOrigin = (req: IncomingMessage) => `http://${req.headers.host}`;
+
+  /**
+   * Requests with a session cookie must come from this service's own pages.
+   * State-changing requests also need the CSRF token and the own Origin.
+   */
+  function checkSessionRequest(
+    req: IncomingMessage,
+    method: string,
+    session: Session
+  ) {
+    const site = req.headers["sec-fetch-site"];
+    if (site !== undefined && site !== "same-origin" && site !== "none") {
+      throw forbidden("Session requests must come from this service's pages.");
+    }
+    if (UNSAFE_METHODS.includes(method)) {
+      if (req.headers.origin !== ownOrigin(req)) {
+        throw forbidden(
+          "A state-changing session request needs this service's Origin."
+        );
+      }
+      const csrf = req.headers[CSRF_HEADER];
+      if (typeof csrf !== "string" || !equalSecrets(csrf, session.csrfToken)) {
+        throw forbidden("Missing or invalid CSRF token.");
+      }
+    }
+  }
+
+  async function sessionRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    method: string,
+    sub: string | undefined,
+    bearer: boolean
+  ) {
+    const store = sessions!;
+    const describe = (session: Session) => ({
+      csrfToken: session.csrfToken,
+      expiresAt: new Date(store.expiresAt(session)).toISOString(),
+    });
+
+    // A bearer client (the launcher) asks for a one-time launch code
+    if (sub === "launch" && method === "POST") {
+      if (!bearer) throw unauthorized("A launch code needs the bearer token.");
+      const { code, expiresAt } = store.createLaunchCode();
+      return send(res, 201, {
+        url: `http://127.0.0.1:${port()}/#launch=${code}`,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    }
+    if (sub) throw notFound(`No route for ${method} ${req.url}.`);
+
+    if (method === "POST") {
+      if (req.headers.origin !== ownOrigin(req)) {
+        throw forbidden("A session can start only from this service's pages.");
+      }
+      const body = (await readJson(req, 4096)) as { code?: unknown };
+      const session = store.exchange(body?.code);
+      if (!session) {
+        throw unauthorized(
+          "The launch link is invalid, used, or expired. Get a new link from the terminal."
+        );
+      }
+      res.setHeader(
+        "Set-Cookie",
+        `${cookieName()}=${session.id}; HttpOnly; SameSite=Strict; Path=/`
+      );
+      return send(res, 201, describe(session));
+    }
+
+    const id = readCookie(req.headers.cookie, cookieName());
+    const session = store.get(id);
+    if (!session)
+      throw unauthorized(
+        "No browser session. Open the launch link from the terminal."
+      );
+    checkSessionRequest(req, method, session);
+
+    if (method === "GET") return send(res, 200, describe(session));
+    if (method === "DELETE") {
+      store.end(session.id);
+      res.setHeader(
+        "Set-Cookie",
+        `${cookieName()}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`
+      );
+      return send(res, 204);
+    }
+    throw notFound(`No route for ${method} ${req.url}.`);
+  }
+
   async function route(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://localhost");
     let parts: string[];
@@ -172,13 +329,28 @@ export function createServer(options: ServerOptions): http.Server {
     }
 
     if (parts[0] !== "v1") {
+      if (webUi && webUi(req, res, url.pathname)) return;
       throw notFound(`No route for ${method} ${url.pathname}.`);
-    }
-    if (!tokenMatches(req.headers.authorization, token)) {
-      throw unauthorized("Missing or invalid bearer token.");
     }
 
     const [, resource, id, sub] = parts;
+    const bearer = tokenMatches(req.headers.authorization, token);
+
+    // Browser session routes
+    if (sessions && resource === "session") {
+      return sessionRoute(req, res, method, id, bearer);
+    }
+
+    if (!bearer) {
+      // A browser session can use the API in place of the bearer token
+      const session = sessions?.get(
+        readCookie(req.headers.cookie, cookieName())
+      );
+      if (!session) {
+        throw unauthorized("Missing or invalid bearer token or session.");
+      }
+      checkSessionRequest(req, method, session);
+    }
 
     if (resource === "projects" && !sub) {
       if (method === "GET" && !id)
@@ -268,15 +440,8 @@ export function createServer(options: ServerOptions): http.Server {
               `Managed file for asset ${asset.id} is missing.`
             );
           }
-          res.writeHead(200, {
-            "Content-Type": asset.mediaType,
-            "Content-Length": asset.size,
-            "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(
-              asset.filename
-            )}`,
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store",
-          });
+          // An optional last path part (the filename) only names the response
+          res.writeHead(200, contentHeaders(asset));
           fs.createReadStream(file).pipe(res);
           return;
         }
@@ -349,15 +514,14 @@ export function createServer(options: ServerOptions): http.Server {
   const server = http.createServer(async (req, res) => {
     try {
       // Reject requests that do not address this server by its loopback name
-      const port = (server.address() as AddressInfo).port;
       const host = req.headers.host;
-      if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
+      if (host !== `127.0.0.1:${port()}` && host !== `localhost:${port()}`) {
         throw forbidden("Invalid Host header.");
       }
 
       // CORS lets the configured page read responses. It is not authentication.
       const origin = req.headers.origin;
-      if (origin !== undefined) {
+      if (origin !== undefined && !(webUi && origin === ownOrigin(req))) {
         if (!allowedOrigins.includes(origin)) {
           throw forbidden("Origin not allowed.");
         }

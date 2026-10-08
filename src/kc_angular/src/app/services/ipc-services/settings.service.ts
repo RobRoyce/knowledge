@@ -16,7 +16,8 @@
 
 import { Injectable, NgZone } from '@angular/core';
 import { BehaviorSubject, tap } from 'rxjs';
-import { ElectronIpcService } from './electron-ipc.service';
+import { SettingsStore } from '@app/platform/settings-store';
+import { WindowControls } from '@app/platform/window-controls';
 import {
   ApplicationSettingsModel,
   DisplaySettingsModel,
@@ -52,94 +53,67 @@ export class SettingsService {
   private _graph = new BehaviorSubject<GraphSettingsModel>({} as any);
   graph = this._graph.asObservable();
 
-  private send = window.api.send;
-
-  private receive = window.api.receive;
-
-  private receiveOnce = window.api.receiveOnce;
-
-  private settingsChannels = {
-    getSettings: 'A2E:Settings:Get',
-    getDefaults: 'A2E:Settings:Defaults',
-    receiveAll: 'E2A:Settings:All',
-    receiveDefaults: 'E2A:Settings:Defaults',
-    setSettings: 'A2E:Settings:Set',
-  };
-
   private ref?: DynamicDialogRef;
 
   constructor(
-    private ipcService: ElectronIpcService,
+    private store: SettingsStore,
+    private windowControls: WindowControls,
     private dialog: DialogService,
     private router: Router,
     private zone: NgZone
   ) {
-    /**
-     * Keep a copy of default settings to allow other components and services to instantiate
-     */
-    this.receiveOnce(
-      this.settingsChannels.receiveDefaults,
-      (settings: SettingsModel) => {
-        this.zone.run(() => {
-          this._defaults = settings;
-        });
-      }
-    );
+    // Keep a copy of default settings for other components and services
+    this.store.defaults().then((settings) => {
+      this.zone.run(() => {
+        this._defaults = settings;
+      });
+    });
 
-    this.send(this.settingsChannels.getDefaults);
+    // Desktop: Electron settings file. Browser: localStorage.
+    this.store.changes.subscribe((settings: SettingsModel) => {
+      this.zone.run(() => {
+        console.debug(
+          `[Debug]-[${new Date().toLocaleString()}]-[SettingsService]: Settings Updated: `,
+          settings
+        );
+        this._settings.next(settings);
 
-    /**
-     * Settings are stored in a JSON file via Electron and kept consistent through IPC messages
-     */
-    this.receive(
-      this.settingsChannels.receiveAll,
-      (settings: SettingsModel) => {
-        this.zone.run(() => {
-          console.debug(
-            `[Debug]-[${new Date().toLocaleString()}]-[SettingsService]: Settings Updated: `,
-            settings
-          );
-          this._settings.next(settings);
+        if (settings.search) {
+          this._search.next(settings.search);
+        } else {
+          console.error('SettingsService - Search Settings not found...');
+        }
 
-          if (settings.search) {
-            this._search.next(settings.search);
-          } else {
-            console.error('SettingsService - Search Settings not found...');
-          }
+        if (settings.app) {
+          this._app.next(settings.app);
+        } else {
+          console.error('SettingsService - Application Settings not found...');
+        }
 
-          if (settings.app) {
-            this._app.next(settings.app);
-          } else {
-            console.error(
-              'SettingsService - Application Settings not found...'
-            );
-          }
+        if (settings.ingest) {
+          this._ingest.next(settings.ingest);
+        } else {
+          console.error('SettingsService - Ingest Settings not found...');
+        }
 
-          if (settings.ingest) {
-            this._ingest.next(settings.ingest);
-          } else {
-            console.error('SettingsService - Ingest Settings not found...');
-          }
+        if (settings.display) {
+          this._display.next(settings.display);
+          setTimeout(() => {
+            this.windowControls.setZoom(settings.display.zoom);
+          });
+        } else {
+          console.error('SettingsService - Display Settings not found...');
+        }
 
-          if (settings.display) {
-            this._display.next(settings.display);
-            setTimeout(() => {
-              this.send('A2E:Window:ZoomIn', settings.display.zoom);
-            });
-          } else {
-            console.error('SettingsService - Display Settings not found...');
-          }
+        if (settings.app.graph) {
+          this._graph.next(settings.app.graph);
+        } else {
+          console.error('SettingsService - Graph Settings not found...');
+        }
+      });
+    });
 
-          if (settings.app.graph) {
-            this._graph.next(settings.app.graph);
-          } else {
-            console.error('SettingsService - Graph Settings not found...');
-          }
-        });
-      }
-    );
-
-    this.send(this.settingsChannels.getSettings);
+    this.store.start();
   }
 
   private _defaults!: SettingsModel;
@@ -158,7 +132,7 @@ export class SettingsService {
    * @param settings
    */
   set(settings: SettingsModel | Object) {
-    this.send(this.settingsChannels.setSettings, settings);
+    this.store.save(settings);
   }
 
   show(category?: 'display' | 'search' | 'import' | 'graph' | 'chat') {

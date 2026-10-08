@@ -13,6 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
+import { StorageService } from '@services/ipc-services/storage.service';
+import { NativeFiles } from '@app/platform/native-files';
 import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service';
 import { ExtractorService } from '@services/ingest-services/extractor.service';
 import { FaviconService } from '@services/ingest-services/favicon.service';
@@ -57,7 +60,10 @@ export class KsFactoryService {
     private http: HttpClient,
     private settings: SettingsService,
     private ipc: ElectronIpcService,
-    private uuid: UuidService
+    private uuid: UuidService,
+    private storage: StorageService,
+    private native: NativeFiles,
+    private platform: Platform
   ) {
     this.settings.search.subscribe((searchSettings) => {
       if (searchSettings.provider) {
@@ -106,7 +112,7 @@ export class KsFactoryService {
     return new Promise<KnowledgeSource>((resolve, reject) => {
       if (type === 'file' && file) {
         if (typeof link === 'string') {
-          this.extractFileResource(link, file)
+          this.extractFileResource(file)
             .then(this.getFileIcon)
             .then((result) => {
               resolve(result);
@@ -130,27 +136,31 @@ export class KsFactoryService {
   async many(
     requests: KnowledgeSourceFactoryRequest
   ): Promise<KnowledgeSource[]> {
-    return new Promise<KnowledgeSource[]>((resolve) => {
+    return new Promise<KnowledgeSource[]>((resolve, reject) => {
       const actions: Promise<KnowledgeSource>[] = [];
 
       if (requests.ingestType === 'file' && requests.files?.length) {
         for (const file of requests.files)
-          actions.push(this.extractFileResource((file as any).path, file));
+          actions.push(this.extractFileResource(file));
 
-        Promise.all(actions).then((results) => {
-          this.getFileIcons(results).then((finalList: KnowledgeSource[]) => {
-            if (this.settings.get().ingest.manager.target === 'all') {
-              // TODO: move file to managed location...
-            }
-            if (requests.originals) {
-              for (let i = 0; i < requests.originals.length; i++) {
-                finalList[i].title = requests.originals[i].title;
-                finalList[i].topics = requests.originals[i].topics;
+        // An upload failure rejects, so the caller can report it
+        Promise.all(actions)
+          .catch(reject)
+          .then((results) => {
+            if (!results) return;
+            this.getFileIcons(results).then((finalList: KnowledgeSource[]) => {
+              if (this.settings.get().ingest.manager.target === 'all') {
+                // TODO: move file to managed location...
               }
-            }
-            resolve(finalList);
+              if (requests.originals) {
+                for (let i = 0; i < requests.originals.length; i++) {
+                  finalList[i].title = requests.originals[i].title;
+                  finalList[i].topics = requests.originals[i].topics;
+                }
+              }
+              resolve(finalList);
+            });
           });
-        });
       }
 
       if (requests.ingestType !== 'file' && requests.links?.length) {
@@ -227,15 +237,19 @@ export class KsFactoryService {
     };
   }
 
-  private async extractFileResource(
-    link: string,
-    file: File
-  ): Promise<KnowledgeSource> {
+  /**
+   * Create a file source from a selected file. The file is uploaded to the
+   * library first, so the source refers to a managed copy (asset ID). The
+   * desktop also records the original path, as information only.
+   */
+  private async extractFileResource(file: File): Promise<KnowledgeSource> {
+    const originalPath = this.native.pathOf(file);
+    const asset = await this.storage.uploadFile(file, originalPath);
     const uuid: UUID = this.uuid.generate(1)[0];
     const fileModel: FileSourceModel = {
       id: uuid,
       filename: file.name.trim(),
-      path: (file as any).path,
+      path: originalPath ?? '',
       size: file.size,
       type: file.type,
       creationTime: Date(),
@@ -243,8 +257,11 @@ export class KsFactoryService {
       accessTime: Date(),
     };
     const source = new SourceModel(fileModel, undefined);
+    const link = originalPath ?? file.name.trim();
     const ref = new KnowledgeSourceReference('file', source, link);
-    return new KnowledgeSource(file.name.trim(), uuid, 'file', ref);
+    const ks = new KnowledgeSource(file.name.trim(), uuid, 'file', ref);
+    ks.assetId = asset.id;
+    return ks;
   }
 
   private getFileIcon(ks: KnowledgeSource): Promise<KnowledgeSource> {
@@ -274,6 +291,12 @@ export class KsFactoryService {
   }
 
   private extractWebResource(link: URL): Promise<KnowledgeSource> {
+    // The browser client must not fetch other sites from the page
+    if (!this.platform.has('saveWebsite')) {
+      return Promise.reject(
+        new Error(this.platform.unavailable('saveWebsite'))
+      );
+    }
     const uuid: UUID = this.uuid.generate(1)[0];
     const source = new SourceModel(undefined, { accessLink: link.href });
     const ref = new KnowledgeSourceReference('website', source, link);

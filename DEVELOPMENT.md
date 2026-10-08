@@ -38,15 +38,32 @@ yarn start
 
 ## Architecture
 
-| Part | Location | Runs in |
-| --- | --- | --- |
-| UI | `src/kc_angular` | Electron renderer |
-| Desktop functions, chat server | `src/kc_electron` | Electron main process |
-| Storage service | `src/kc_storage` | Separate Node.js process |
-| API contracts | `src/kc_contracts` | Shared. No application imports. |
+| Part | Location | Runs in | Owns |
+| --- | --- | --- | --- |
+| Frontend | `src/kc_angular` | Electron renderer or a browser | Navigation, presentation, editing, temporary UI state, API calls |
+| Backend (storage service) | `src/kc_storage` | Separate Node.js process | Projects, sources, managed files, validation, persistence, backup and restore, browser sessions, browser UI files |
+| Desktop | `src/kc_electron` | Electron main process | Windows, native file access by path, watched folders, thumbnails and file icons, embedded browser, drag-out, backend start and stop. Also the chat server (for now). |
+| Contracts | `src/kc_contracts`, `src/kc_shared` | Shared | Data types, record mapping, default settings. No Angular or Electron imports. |
 
-The design of the storage service is in
-[docs/storage-service.md](docs/storage-service.md).
+The frontend reaches platform functions only through small capability
+interfaces in `src/kc_angular/src/app/platform/`:
+
+| Interface | Desktop | Browser |
+| --- | --- | --- |
+| `Platform` | All features | Library features; desktop-only actions are hidden or disabled with a reason |
+| `BackendService` | IPC addresses, bearer tokens | Same origin, session cookie, CSRF header |
+| `SettingsStore` | Electron settings file | `localStorage` |
+| `WindowControls` | Minimize, maximize, zoom | Not available |
+| `NativeFiles` | Original file path, copy by path, open in default app | Not available |
+| `ManagedFiles` | `blob:` view, default app | Same-origin URL with filename, new tab |
+
+Both clients import files the same way: the user selects a `File`, the
+frontend uploads its bytes (`POST /v1/assets`), and the source stores the
+asset ID. IDs come from `crypto.randomUUID()`.
+
+Designs: [docs/storage-service.md](docs/storage-service.md),
+[docs/desktop-storage-completion.md](docs/desktop-storage-completion.md),
+[docs/browser-library.md](docs/browser-library.md).
 
 ### Data ownership
 
@@ -70,7 +87,7 @@ addresses and tokens through IPC (`A2E:Backend:Info`).
 
 ### Access boundary
 
-- Verified: a request without the correct token gets `401`. The window of
+- Verified: a request without the correct token or browser session gets `401`. The window of
   one instance does not know the address or token of another instance, so
   it cannot use the other instance's servers by mistake.
 - Verified: the servers do not accept connections from other computers.
@@ -78,6 +95,8 @@ addresses and tokens through IPC (`A2E:Backend:Info`).
   program can read the token (for example, from the storage service's
   environment, `KC_STORAGE_TOKEN`), or read the profile files directly.
   The real boundary is the operating-system user account.
+- Verified (browser client): another local site in the same browser cannot
+  read the API or write to it, and its requests leave no records or files.
 - The browser extension server (port 9000, off by default) has no token.
 
 Only one instance can use a profile at a time. A second start with the same
@@ -129,6 +148,48 @@ out of the autoscan folder. Make a backup first.
 
 Do not confuse `~/Library/Application Support/Knowledge`. macOS owns that
 directory (`knowledgeC.db`). Knowledge does not use it.
+
+## Browser client (no Electron)
+
+```sh
+yarn build-angular-dev
+yarn browser
+```
+
+`yarn browser` starts the storage service with the built UI and prints a
+one-time launch link, for example
+`http://127.0.0.1:53124/#launch=...`. Open it in Chrome. Press Enter in the
+terminal for a new link. Press Ctrl+C to stop.
+
+Options: `--data-dir <dir>` (default `.dev-profiles/browser/library`),
+`--web-root <dir>` (default `src/kc_angular/dist/main`), `--open` (macOS:
+open the default browser).
+
+What works in the browser: projects, file upload (PDF, text, and other
+files), the Document view for PDF, text, and images, topics and metadata,
+search, opening managed files in a new tab, library export and restore,
+chat and preferences backup (browser local storage).
+
+Desktop only (hidden or disabled in the browser, with a reason): saving
+websites and the example websites, chat, the built-in browser, watched
+folders and extension settings, window controls, opening files in other
+apps, showing files in Finder, file thumbnails and file icons, dragging
+files out.
+
+### Browser session
+
+- The launch code is 256 random bits, single use, and expires after 5
+  minutes. Only a bearer-token client (the launcher) can create one.
+- The page exchanges it for an `HttpOnly`, `SameSite=Strict` cookie,
+  `kc_session_<port>`, and a CSRF token that stays in page memory.
+- Writes need the CSRF token and the service's own `Origin`. Requests that
+  a browser marks as cross-site or same-site (another local port) are
+  refused.
+- A session ends after 30 minutes without requests, after 12 hours, on
+  `DELETE /v1/session`, or when the service stops.
+- The bearer token is never printed or sent to the browser. The launch
+  code appears once in the terminal and in the first URL fragment.
+- This is a local, single-user setup. It is not a hosted deployment.
 
 ## Storage service without Electron
 
@@ -265,6 +326,7 @@ Stop the app first. The command uses the same checks as the app.
 | `yarn workspace kc_storage typecheck` | Storage service types (TypeScript 5) | |
 | `yarn e2e` | Desktop UI with real profiles (below) | macOS, `yarn build-dev` first |
 | `yarn e2e-packaged` | The unsigned package (below) | macOS arm64, `yarn package-local` first |
+| `yarn e2e-browser` | The browser client in Google Chrome, no Electron (below) | Google Chrome, `yarn build-angular-dev` first |
 
 The end-to-end tests start the real app with new, empty profiles in
 `e2e/.output/<run>/`. They never use your normal profile.
@@ -290,6 +352,15 @@ The end-to-end tests start the real app with new, empty profiles in
   version, the refusal for a non-empty library, unchanged chat history,
   two instances at the same time, and that no service process remains.
   Output stays in `$TMPDIR/kc-packaged-*`. The test removes the app copy.
+
+- `e2e/browser/library.e2e.mjs`: starts `yarn browser` with scratch
+  libraries and opens the launch link in headless Google Chrome. It
+  creates a project, uploads a PDF and a text file, shows both, annotates,
+  searches, restarts the service and the browser, checks that the records
+  remain, opens the managed files in new tabs, exports the library, and
+  restores it through the UI into a second library. It also checks
+  requests without a session, reads and writes from another local site,
+  and that the launcher does not print the bearer token.
 
 Test files are in `e2e/fixtures/`. To delete old test output, delete
 `e2e/.output/`.

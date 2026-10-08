@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import { Component, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import {
   ConfirmationService,
@@ -172,9 +173,16 @@ import { finalize, map, take, takeUntil, tap } from 'rxjs/operators';
                 [tipShowOnHover]="true"
               >
                 <app-ks-message
+                  *ngIf="platform.has('saveWebsite')"
                   class="cursor-pointer hover:surface-hover"
                   (click)="loadExamples()"
                   status="Surprise Me!"
+                >
+                </app-ks-message>
+                <app-ks-message
+                  *ngIf="!platform.has('saveWebsite')"
+                  [title]="platform.unavailable('saveWebsite')"
+                  status="Example websites: desktop app only"
                 >
                 </app-ks-message>
               </div>
@@ -264,7 +272,9 @@ export class HomeComponent implements OnDestroy {
   collapsed = false;
   ksMenuItems: MenuItem[] = [];
   loading = false;
-  supportedTypes: string[] = ['Links', 'Files'];
+  supportedTypes: string[] = this.platform.has('saveWebsite')
+    ? ['Links', 'Files']
+    : ['Files'];
   animate = true;
   importAll = false;
   reset = false;
@@ -284,7 +294,8 @@ export class HomeComponent implements OnDestroy {
     private menu: KsContextMenuService,
     private notifications: NotificationsService,
     private tree: ProjectTreeFactoryService,
-    private settings: SettingsService
+    private settings: SettingsService,
+    public platform: Platform
   ) {
     this.kcProject = projects.currentProject;
 

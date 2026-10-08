@@ -161,7 +161,12 @@ export function client(service: Service) {
 /** Raw request with full control of headers (Host, Origin). */
 export function rawRequest(
   service: Service,
-  options: { method?: string; path: string; headers?: Record<string, string> }
+  options: {
+    method?: string;
+    path: string;
+    headers?: Record<string, string>;
+    body?: string | Buffer;
+  }
 ): Promise<{
   status: number;
   headers: http.IncomingHttpHeaders;
@@ -188,6 +193,6 @@ export function rawRequest(
     req.setTimeout(5000, () =>
       req.destroy(new Error(`Timed out: ${options.path}`))
     );
-    req.end();
+    req.end(options.body);
   });
 }

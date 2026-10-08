@@ -21,7 +21,7 @@
   style="height: 32px; max-width: 100vw"
 >
   <div
-    *ngIf="os && os === 'darwin'"
+    *ngIf="windowControls.available && os === 'darwin'"
     class="select-none title-bar-interactive flex-row-center-start"
   >
     <div
@@ -37,7 +37,7 @@
       class="macos-window-button window-button-maximize"
     ></div>
   </div>
-  <div *ngIf="!os || (os && os !== 'darwin')"></div>
+  <div *ngIf="!windowControls.available || os !== 'darwin'"></div>
 
   <div class="flex-row-center-between">
     <app-create class="title-bar-interactive"></app-create>
@@ -45,9 +45,9 @@
     <app-history class="title-bar-interactive"></app-history>
   </div>
 
-  <div *ngIf="!os || (os && os === 'darwin')"></div>
+  <div *ngIf="!windowControls.available || os === 'darwin'"></div>
   <div
-    *ngIf="os && os !== 'darwin'"
+    *ngIf="windowControls.available && os !== 'darwin'"
     class="select-none title-bar-interactive flex flex-row align-items-start h-full"
   >
     <div

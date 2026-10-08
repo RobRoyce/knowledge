@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { ManagedFiles } from '@app/platform/managed-files';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service';
@@ -143,7 +144,8 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
     private command: KsCommandService,
     private ingest: IngestService,
     private clipboard: Clipboard,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private managedFiles: ManagedFiles
   ) {
     this.ks = config.data.ks;
   }
@@ -192,7 +194,10 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
 
     if (clickEvent.openClicked) {
       if (this.ks.assetId) {
-        this.ipc.openAsset(this.ks.assetId);
+        this.managedFiles.open(
+          this.ks.assetId,
+          this.ks.reference?.source?.file?.filename ?? this.ks.title
+        );
       } else {
         this.ipc.openLocalFile(this.fileViewConfig.filePath);
       }

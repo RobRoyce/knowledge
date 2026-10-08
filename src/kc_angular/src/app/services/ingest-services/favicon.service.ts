@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service';
 import { HttpClient, HttpResponse } from '@angular/common/http';
@@ -35,7 +36,8 @@ export class FaviconService {
     private httpClient: HttpClient,
     private sanitizer: DomSanitizer,
     private ipcService: ElectronIpcService,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private platform: Platform
   ) {}
 
   loading() {
@@ -213,6 +215,11 @@ export class FaviconService {
       return undefined;
     }
 
+    // Plain URLs (for example, the generic file icon) need no decoding
+    if (!iconStr.startsWith('data:')) {
+      return iconStr;
+    }
+
     const blob = this.dataURItoBlob(iconStr);
     if (!blob) {
       return undefined;
@@ -283,6 +290,12 @@ export class FaviconService {
     });
 
     this.webIconsFromKsList(webList);
+
+    // File icons come from the operating system (desktop only)
+    if (!this.platform.has('fileIcons')) {
+      fileList.forEach((ks) => (ks.icon = this.file()));
+      return ksList;
+    }
 
     this.ipcService.getFileIcon(filePaths).then((icons) => {
       for (let i = 0; i < fileList.length; i++) {

@@ -13,24 +13,34 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  */
-import {KnowledgeSource} from "kc_angular/src/app/models/knowledge.source.model";
-import {UUID} from "./uuid.model";
-import {EventModel} from "./event.model";
+import { KnowledgeSourceModel } from "./knowledge.source.model";
+import { UUID } from "./uuid.model";
+import { EventModel } from "./event.model";
 
-export type KcProjectType = 'default' | 'school' | 'work' | 'hobby' | 'research';
+export type KcProjectType =
+  | "default"
+  | "school"
+  | "work"
+  | "hobby"
+  | "research";
 
-export interface KcProjectModel {
-    readonly id: UUID;
-    name: string;
-    type: KcProjectType;
-    description: string;
-    events?: EventModel[];
-    authors: string[];
-    parentId: UUID;
-    subprojects: string[];
-    topics: string[];
-    sources: UUID[];
+/**
+ * S is the source type of the client. The default is the shared source
+ * model. This file must not import from Angular or Electron.
+ */
+export interface KcProjectModel<S = KnowledgeSourceModel> {
+  readonly id: UUID;
+  name: string;
+  type: KcProjectType;
+  description: string;
+  events?: EventModel[];
+  authors: string[];
+  parentId: UUID;
+  subprojects: string[];
+  topics: string[];
+  sources: UUID[];
 
-    // TODO: this needs to be removed
-    knowledgeSource: KnowledgeSource[];
+  // Sources are stored separately by the storage service. The UI keeps
+  // them on the project object.
+  knowledgeSource: S[];
 }
