@@ -19,7 +19,6 @@ import {
   newRun,
   readAsset,
   readLibrary,
-  shot,
   startFixtureSite,
   waitForFile,
 } from "./lib.mjs";
@@ -149,7 +148,6 @@ test(
       await ui.openDocumentTab(ctx.page);
       assert.match(await documentSource(ctx.page), /^blob:/);
       await ctx.page.waitForTimeout(2000);
-      await shot(ctx.page, run, "a-pdf-after-original-deleted");
       await ui.closeDialog(ctx.page);
 
       // Export the library through the UI
@@ -187,7 +185,6 @@ test(
       await ui.openDocumentTab(ctx.page);
       assert.match(await documentSource(ctx.page), /^blob:/);
       await ctx.page.waitForTimeout(2000);
-      await shot(ctx.page, run, "b-restored-pdf");
 
       // Desktop functions read the managed file, not the deleted original
       const thumbnail = await ctx.page.evaluate(

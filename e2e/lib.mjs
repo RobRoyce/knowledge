@@ -40,9 +40,9 @@ export function newRun(name) {
   return dir;
 }
 
-/** Launch the app with the given profile directory. */
 /**
- * Launch the app with the given profile directory.
+ * Launch the app with the given profile directory. The window stays hidden
+ * and never takes focus; set KC_E2E_SHOW=1 to watch it.
  *
  * options.packaged: path to a packaged Knowledge.app. The app then gets
  * only options.env (no inherited variables) and runs in options.cwd.
@@ -52,6 +52,8 @@ export async function launch(profileDir, logFile, env = {}, options = {}) {
     throw new Error("launch() needs an explicit profile directory");
   }
   const log = fs.createWriteStream(logFile, { flags: "a" });
+  const hidden =
+    process.env.KC_E2E_SHOW === "1" ? {} : { KC_HIDDEN_WINDOW: "1" };
   const app = await electron.launch(
     options.packaged
       ? {
@@ -61,14 +63,14 @@ export async function launch(profileDir, logFile, env = {}, options = {}) {
           ),
           args: [],
           cwd: options.cwd,
-          env: { ...env, KC_PROFILE_DIR: profileDir },
+          env: { ...env, ...hidden, KC_PROFILE_DIR: profileDir },
           timeout: 60000,
         }
       : {
           executablePath: ELECTRON,
           args: [REPO],
           cwd: REPO,
-          env: { ...appEnv(), ...env, KC_PROFILE_DIR: profileDir },
+          env: { ...appEnv(), ...env, ...hidden, KC_PROFILE_DIR: profileDir },
           timeout: 60000,
         }
   );

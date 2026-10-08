@@ -27,7 +27,6 @@ import {
   launch,
   readAsset,
   readLibrary,
-  shot,
   startFixtureSite,
   waitForFile,
 } from "../lib.mjs";
@@ -117,8 +116,6 @@ test(
     };
     const options = { packaged: app, cwd };
     const log = path.join(root, "app.log");
-    const shots = path.join(root, "shots");
-    fs.mkdirSync(shots);
     console.log(`packaged test directory: ${root}`);
 
     // No Node.js on the restricted PATH
@@ -239,9 +236,9 @@ test(
       );
 
       // An unsupported backup version is refused with a clear message
-      const v2 = await withVersion(tar, path.join(root, "v2.tar"), 2);
-      const refused = await ui.restoreLibraryError(b.page, v2);
-      assert.match(refused, /Backup version 2 is not supported/);
+      const v3 = await withVersion(tar, path.join(root, "v3.tar"), 3);
+      const refused = await ui.restoreLibraryError(b.page, v3);
+      assert.match(refused, /Backup version 3 is not supported/);
       assert.deepEqual(await readLibrary(b.page), []);
 
       // 10. Restore through the interface
@@ -265,7 +262,6 @@ test(
         refusal,
         /Restore works only into an empty library\. This library has 1 project, 3 sources, and 2 files/
       );
-      await shot(b.page, shots, "b-restore-refused");
       await close(b);
       b = undefined;
 
@@ -296,7 +292,6 @@ test(
       await embed.waitFor({ timeout: 15000 });
       assert.match(await embed.getAttribute("src"), /^blob:/);
       await b.page.waitForTimeout(2000);
-      await shot(b.page, shots, "b-restored-pdf");
       await ui.closeDialog(b.page);
 
       const thumbnail = await b.page.evaluate(
@@ -328,7 +323,7 @@ test(
       if (a) await close(a);
       if (b) await close(b);
       site.close();
-      // Keep logs, profiles, and screenshots. Remove the 440 MB app copy.
+      // Keep logs and profiles. Remove the 440 MB app copy.
       fs.rmSync(app, { recursive: true, force: true });
     }
   }
