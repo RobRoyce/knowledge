@@ -31,7 +31,7 @@ import { readTarEntry, readTarIndex, streamTarEntry } from "./tar.ts";
 import { validAssetId, validProject, validSource } from "./validate.ts";
 import { BACKUP_FORMAT } from "./backup.ts";
 
-export const SUPPORTED_BACKUP_VERSIONS = [1];
+export const SUPPORTED_BACKUP_VERSIONS = [1, 2];
 
 export const RESTORE_LIMITS = {
   archiveBytes: 8 * 1024 ** 3,
@@ -43,7 +43,7 @@ export const RESTORE_LIMITS = {
 /** What a library backup never contains. Shown before confirmation. */
 export const NOT_IN_LIBRARY_BACKUP = [
   "Chat history",
-  "Inbox and UI preferences",
+  "UI preferences",
   "Application settings",
   "API keys",
   "Extracted-text cache",
@@ -66,6 +66,7 @@ export interface StagedRestore {
 export interface RestoreResult {
   projects: number;
   sources: number;
+  inbox: number;
   assets: number;
 }
 
@@ -234,7 +235,11 @@ export async function stageRestore(
         fail(`Invalid source ${JSON.stringify(s?.id)}: ${e.message}`);
       }
       unique(sourceIds, record.id, "source");
-      if (!projectIds.has(record.projectId)) {
+      if (record.projectId === null) {
+        if (manifest.version < 2) {
+          fail(`Source ${record.id} has no project. Version 1 has no inbox.`);
+        }
+      } else if (!projectIds.has(record.projectId)) {
         fail(
           `Source ${record.id} refers to project ${record.projectId}, which is not in the backup.`
         );
@@ -305,6 +310,7 @@ export async function stageRestore(
       counts: {
         projects: projects.length,
         sources: sources.length,
+        inbox: sources.filter((s) => s.projectId === null).length,
         assets: assets.length,
         bytes,
       },
@@ -363,6 +369,7 @@ export function activateRestore(
     return {
       projects: staged.projects.length,
       sources: staged.sources.length,
+      inbox: staged.sources.filter((s) => s.projectId === null).length,
       assets: staged.assets.length,
     };
   } catch (e) {

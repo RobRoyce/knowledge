@@ -24,6 +24,11 @@ import {
 } from '@services/ipc-services/backend.service';
 import { isDesktop } from '@app/platform/platform';
 import {
+  BrowserWebsitePdf,
+  DesktopWebsitePdf,
+  WebsitePdf,
+} from '@app/platform/website-pdf';
+import {
   BrowserSettingsStore,
   DesktopSettingsStore,
   SettingsStore,
@@ -82,6 +87,10 @@ import {
 import { ContextMenuModule } from 'primeng/contextmenu';
 import { CountdownPipe } from '@pipes/countdown.pipe';
 import { CreateComponent } from '@components/shared/create.component';
+import {
+  SessionDialogComponent,
+  SessionStatusComponent,
+} from '@components/shared/session.component';
 import { DataViewModule } from 'primeng/dataview';
 import { DialogModule } from 'primeng/dialog';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -205,6 +214,8 @@ import { CarouselModule } from 'primeng/carousel';
 @NgModule({
   declarations: [
     AppComponent,
+    SessionDialogComponent,
+    SessionStatusComponent,
     BrowserViewComponent,
     CalendarComponent,
     ChatActionsComponent,
@@ -358,7 +369,7 @@ import { CarouselModule } from 'primeng/carousel';
     {
       provide: APP_INITIALIZER,
       useFactory: initializeBackend,
-      deps: [BackendService, StorageService],
+      deps: [BackendService, StorageService, SettingsStore],
       multi: true,
     },
     {
@@ -372,9 +383,12 @@ import { CarouselModule } from 'primeng/carousel';
       useClass: DESKTOP ? DesktopBackendService : BrowserBackendService,
     },
     {
+      provide: WebsitePdf,
+      useClass: DESKTOP ? DesktopWebsitePdf : BrowserWebsitePdf,
+    },
+    {
       provide: SettingsStore,
-      useFactory: () =>
-        DESKTOP ? new DesktopSettingsStore() : new BrowserSettingsStore(),
+      useClass: DESKTOP ? DesktopSettingsStore : BrowserSettingsStore,
     },
     {
       provide: WindowControls,

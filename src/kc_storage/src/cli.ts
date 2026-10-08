@@ -151,6 +151,7 @@ function summary(report: Awaited<ReturnType<typeof migrate>>) {
     files: count(report.files),
     missingFiles: report.files.missing,
     superseded: report.superseded.length,
+    inboxEntries: report.inbox.length,
     rendererKeys: report.rendererKeys.length,
   };
 }

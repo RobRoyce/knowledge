@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+import { Platform } from '@app/platform/platform';
 import { Injectable } from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { KsCommandService } from '@services/command-services/ks-command.service';
@@ -28,7 +29,8 @@ export class KsContextMenuService {
 
   constructor(
     private ksCommandService: KsCommandService,
-    private projectService: ProjectService
+    private projectService: ProjectService,
+    private platform: Platform
   ) {}
 
   generate(target: KnowledgeSource, ksList?: KnowledgeSource[]): MenuItem[] {
@@ -63,7 +65,9 @@ export class KsContextMenuService {
         icon: PrimeIcons.EXTERNAL_LINK,
       },
       {
-        label: 'Chat',
+        label: this.platform.has('chat') ? 'Chat' : 'Chat (desktop app)',
+        title: this.platform.unavailable('chat'),
+        disabled: !this.platform.has('chat'),
         icon: PrimeIcons.COMMENTS,
         command: () => {
           this.ksCommandService.chat(target);
@@ -271,7 +275,8 @@ export class KsContextMenuService {
   }
 
   private setShowIn(menu: MenuItem[], target: KnowledgeSource) {
-    if (target.ingestType === 'file') {
+    // The browser has no folders to show. "Open" covers the file there.
+    if (target.ingestType === 'file' && this.platform.has('showInFolder')) {
       const menuItem = {
         label: 'Show in files',
         icon: PrimeIcons.FOLDER_OPEN,

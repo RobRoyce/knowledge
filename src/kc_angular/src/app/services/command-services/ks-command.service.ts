@@ -57,15 +57,17 @@ export class KsCommandService {
     private platform: Platform
   ) {}
 
-  update(ksList: KnowledgeSource[], notify = true) {
-    this.data.sources.update(ksList).then(() => {
-      if (notify) {
+  /** Resolves true when the service saved every source. */
+  update(ksList: KnowledgeSource[], notify = true): Promise<boolean> {
+    return this.data.sources.update(ksList).then((saved) => {
+      if (saved && notify) {
         this.notifications.success(
           'Source Command',
           `Source${ksList.length > 1 ? 's' : ''} Updated`,
           ksList.map((k) => k.title).join(', ')
         );
       }
+      return saved;
     });
   }
 
@@ -110,6 +112,12 @@ export class KsCommandService {
   }
 
   preview(ks: KnowledgeSource) {
+    // The website preview is the built-in browser (desktop). A browser tab
+    // shows the website instead.
+    if (ks.ingestType !== 'file' && !this.platform.has('embeddedBrowser')) {
+      this.open(ks);
+      return;
+    }
     this.onKsPreview(ks);
   }
 
@@ -147,6 +155,16 @@ export class KsCommandService {
             `${e}`
           )
         );
+    } else if (
+      ks.ingestType === 'file' &&
+      typeof ks.accessLink === 'string' &&
+      !this.platform.has('openInDefaultApp')
+    ) {
+      this.notifications.warn(
+        'Source Command',
+        'Not Available',
+        'This file has no copy in the library. Opening a file by its local path is available in the desktop app.'
+      );
     } else if (ks.ingestType === 'file' && typeof ks.accessLink === 'string') {
       this.ipc.openLocalFile(ks.accessLink).then((result) => {
         if (result) {
@@ -164,8 +182,11 @@ export class KsCommandService {
         }
       });
     } else if (ks && ks.accessLink) {
+      // noopener: the website gets no reference to this window
       window.open(
-        typeof ks.accessLink === 'string' ? ks.accessLink : ks.accessLink.href
+        typeof ks.accessLink === 'string' ? ks.accessLink : ks.accessLink.href,
+        '_blank',
+        'noopener'
       );
       this.notifications.success(
         'Source Command',

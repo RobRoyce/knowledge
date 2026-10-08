@@ -20,6 +20,7 @@ import {
   WebsiteMetaTagsModel,
 } from '@shared/models/web.source.model';
 import { HttpClient } from '@angular/common/http';
+import { WebsitePdf } from '@app/platform/website-pdf';
 import { Injectable, NgZone } from '@angular/core';
 import { NotificationsService } from '@services/user-services/notifications.service';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -35,10 +36,20 @@ export class ExtractorService {
     private httpClient: HttpClient,
     private notifications: NotificationsService,
     private dialog: DialogService,
-    private zone: NgZone
+    private zone: NgZone,
+    private pdf: WebsitePdf
   ) {}
 
+  /** Save a website as PDF through the platform. Desktop only. */
   websiteToPdf(url: string, outFileName?: string) {
+    if (!this.pdf.available) {
+      this.notifications.warn(
+        'Extractor Service',
+        'Not Available',
+        'Saving a website as PDF is available in the desktop app.'
+      );
+      return;
+    }
     const dialogRef = this.dialog.open(LoadingComponent, {
       width: '300px',
       height: '150px',
@@ -52,43 +63,23 @@ export class ExtractorService {
       dismissableMask: false,
     });
 
-    const timer = setTimeout(() => {
-      dialogRef.close();
-      this.notifications.error(
-        'Extractor Service',
-        'Failed',
-        'Failed to save PDF'
-      );
-    }, 20000);
-
-    window.api.receive('E2A:Extraction:Website', (result: any) => {
-      this.zone.run(() => {
-        if (result) {
-          console.log('Saved to: ', result);
+    this.pdf
+      .save(url, outFileName ?? 'website')
+      .then((path) => {
+        this.zone.run(() =>
           this.notifications.success(
             'Extractor Service',
             'PDF Saved Successfully',
-            result
-          );
-        } else {
-          this.notifications.error(
-            'Extractor Service',
-            'Failed',
-            'Failed to save PDF'
-          );
-        }
-        clearTimeout(timer);
-        dialogRef.close();
-      });
-    });
-
-    // Send message to Electron ipcMain
-    const args: object = {
-      url: url,
-      filename: outFileName,
-    };
-
-    window.api.send('A2E:Extraction:Website', args);
+            path
+          )
+        );
+      })
+      .catch((e: Error) => {
+        this.zone.run(() =>
+          this.notifications.error('Extractor Service', 'Failed', e.message)
+        );
+      })
+      .finally(() => this.zone.run(() => dialogRef.close()));
   }
 
   async extractWebsiteArticle(url: string) {

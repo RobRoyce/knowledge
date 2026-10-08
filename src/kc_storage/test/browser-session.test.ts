@@ -205,16 +205,20 @@ test("session requests need same-origin fetches, and writes need CSRF token and 
     401
   );
 
-  // Reads from the own page work; reads started by other sites do not
-  assert.equal(
-    (
-      await rawRequest(svc, {
-        path: "/v1/projects",
-        headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin" },
-      })
-    ).status,
-    200
-  );
+  // Reads from the own page work; reads started by other sites do not.
+  // Session responses report the remaining session time; bearer ones do not.
+  const read = await rawRequest(svc, {
+    path: "/v1/projects",
+    headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin" },
+  });
+  assert.equal(read.status, 200);
+  const ttl = Number(read.headers["x-knowledge-session-ttl"]);
+  assert.ok(ttl > 29 * 60 && ttl <= 30 * 60, `ttl ${ttl}`);
+  const bearer = await rawRequest(svc, {
+    path: "/v1/projects",
+    headers: { Authorization: `Bearer ${svc.token}` },
+  });
+  assert.equal(bearer.headers["x-knowledge-session-ttl"], undefined);
   for (const site of ["cross-site", "same-site"]) {
     assert.equal(
       (
@@ -407,7 +411,9 @@ test("managed files cannot run as the application; filenames are kept", async ()
     assert.equal(res.headers["content-type"], c.contentType, c.type);
     assert.equal(res.headers["x-content-type-options"], "nosniff");
     assert.equal(
-      String(res.headers["content-security-policy"] ?? "").startsWith("sandbox"),
+      String(res.headers["content-security-policy"] ?? "").startsWith(
+        "sandbox"
+      ),
       c.csp,
       c.type
     );

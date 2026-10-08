@@ -455,34 +455,14 @@ export class HomeComponent implements OnDestroy {
       return;
     }
 
-    if (this.importAll) {
-      this.projects
-        .updateProjects([
-          {
-            id: project.id,
-            addKnowledgeSource: this.upNext,
-          },
-        ])
-        .then(() => {
-          if (this.active) {
-            for (const source of this.upNext) {
-              this.ingest.add(source);
-            }
-          }
-        });
-    } else if (this.active) {
-      this.projects
-        .updateProjects([
-          {
-            id: project.id,
-            addKnowledgeSource: [this.active],
-          },
-        ])
-        .then(() => {
-          if (this.active) {
-            this.ingest.add(this.active);
-          }
-        });
+    // An entry leaves the inbox only after the service saved the move
+    const sources = this.importAll
+      ? [...this.upNext]
+      : this.active
+      ? [this.active]
+      : [];
+    if (sources.length > 0) {
+      this.ingest.transfer(sources, project.id.value);
     }
   }
 

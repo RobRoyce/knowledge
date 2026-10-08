@@ -22,5 +22,7 @@ export const notFound = (message: string) =>
   new StorageError(404, "not_found", message);
 export const conflict = (message: string) =>
   new StorageError(409, "conflict", message);
+export const preconditionFailed = (message: string) =>
+  new StorageError(412, "precondition_failed", message);
 export const tooLarge = (message: string) =>
   new StorageError(413, "payload_too_large", message);

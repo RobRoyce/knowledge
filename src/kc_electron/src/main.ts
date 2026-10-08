@@ -43,6 +43,13 @@ import { newToken, registerBackendInfo } from "./app/backend";
 import { startStorageService, stopStorageService } from "./app/storage.process";
 import { configureStorageClient } from "./app/storage.client";
 
+/**
+ * End-to-end tests set KC_HIDDEN_WINDOW=1: the window is transparent, lets
+ * mouse events pass through, and never takes focus. It stays "shown", so
+ * Chromium keeps painting after reloads and Playwright can capture it.
+ */
+const HIDDEN_WINDOW = process.env.KC_HIDDEN_WINDOW === "1";
+
 const settingsService = require("./app/services/settings.service");
 
 const MAIN_ENTRY: string = path.join(
@@ -121,7 +128,6 @@ function createMainWindow() {
 
   app.setName("Knowledge");
 
-  // kcMainWindow = new BrowserWindow(config);
   kcMainWindow = new BrowserWindow({
     title: "Knowledge",
     backgroundColor: backgroundColor,
@@ -191,9 +197,15 @@ function setMainWindowListeners() {
     return { action: "deny" };
   });
 
-  // Show the window once it's ready
+  // Show the window once it's ready. Tests show it invisible and inactive.
   kcMainWindow.once("ready-to-show", () => {
-    kcMainWindow.show();
+    if (HIDDEN_WINDOW) {
+      kcMainWindow.setOpacity(0);
+      kcMainWindow.setIgnoreMouseEvents(true);
+      kcMainWindow.showInactive();
+    } else {
+      kcMainWindow.show();
+    }
   });
 
   const ipcChannels = new KnowledgeIpc();
@@ -244,6 +256,10 @@ function checkForUpdates() {
 }
 
 app.on("ready", async function () {
+  // Tests: no Dock icon and no focus change on macOS
+  if (HIDDEN_WINDOW && process.platform === "darwin") {
+    app.setActivationPolicy("accessory");
+  }
   // Projects and sources live in the storage service. Without it the app cannot work.
   const endpoint = await storage;
   if (endpoint.error) {

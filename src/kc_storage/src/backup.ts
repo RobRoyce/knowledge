@@ -1,7 +1,7 @@
 /*
  * Portable library backup: a tar file with manifest.json and assets/<id>.
- * It holds projects, sources, and managed files. It does not hold chat
- * history, UI preferences, settings, or credentials.
+ * It holds projects, sources, inbox entries, and managed files. It does
+ * not hold chat history, UI preferences, settings, or credentials.
  */
 
 import type { Writable } from "node:stream";
@@ -17,7 +17,7 @@ export async function writeBackup(dir: DataDir, out: Writable) {
   const { library, assets } = dir;
   const manifest: LibraryBackupManifest = {
     format: BACKUP_FORMAT,
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     service: { version: VERSION, schemaVersion: SCHEMA_VERSION },
     projects: library.listProjects(),

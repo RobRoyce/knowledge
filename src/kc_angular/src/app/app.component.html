@@ -45,7 +45,13 @@
     <app-history class="title-bar-interactive"></app-history>
   </div>
 
-  <div *ngIf="!windowControls.available || os === 'darwin'"></div>
+  <app-session-status
+    *ngIf="backend.sessions"
+    class="title-bar-interactive h-full"
+  ></app-session-status>
+  <div
+    *ngIf="!backend.sessions && (!windowControls.available || os === 'darwin')"
+  ></div>
   <div
     *ngIf="windowControls.available && os !== 'darwin'"
     class="select-none title-bar-interactive flex flex-row align-items-start h-full"
@@ -242,6 +248,12 @@
 </div>
 
 <p-confirmDialog appendTo="body"></p-confirmDialog>
+<p-confirmDialog
+  key="session-logout"
+  appendTo="body"
+  [baseZIndex]="20000"
+></p-confirmDialog>
+<app-session-dialog></app-session-dialog>
 <p-messages key="app-banner"></p-messages>
 <p-toast
   [preventOpenDuplicates]="true"

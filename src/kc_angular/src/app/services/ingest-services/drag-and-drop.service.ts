@@ -322,8 +322,8 @@ export class DragAndDropService {
 
     // Create a list of updates to be applied
     const updates = this.moveSourceRequests([source], projectId);
-    this.projects.updateProjects(updates).then(() => {
-      this._sourceDrop.next(source.id.value);
+    this.projects.updateProjects(updates).then((saved) => {
+      if (saved) this._sourceDrop.next(source.id.value);
     });
   }
 
@@ -341,7 +341,8 @@ export class DragAndDropService {
     // Create a list of updates to be applied
     const updates = this.moveSourceRequests(sources, projectId);
 
-    this.projects.updateProjects(updates).then(() => {
+    this.projects.updateProjects(updates).then((saved) => {
+      if (!saved) return;
       for (const source of sources) {
         this._sourceDrop.next(source.id.value);
       }

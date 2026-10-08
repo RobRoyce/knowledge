@@ -54,6 +54,9 @@ export class FaviconService {
 
   // NOTE: https://stackoverflow.com/a/45630579, https://stackoverflow.com/a/15750809, https://erikmartinjordan.com/get-favicon-google-api
   async extract(urls: string[]): Promise<any[]> {
+    if (urls && !this.platform.has('websiteIcons')) {
+      return urls.map(() => this.defaultIcon);
+    }
     return new Promise((resolve, reject) => {
       if (urls === undefined) reject(undefined);
 
@@ -127,6 +130,10 @@ export class FaviconService {
 
   webIconsFromKsList(ksList: KnowledgeSource[]) {
     for (const ks of ksList) {
+      if (!this.platform.has('websiteIcons')) {
+        ks.icon = this.defaultIcon;
+        continue;
+      }
       ks.icon = this.loading();
 
       let url: string;
@@ -204,7 +211,7 @@ export class FaviconService {
       return undefined;
     }
 
-    if (iconStr == 'undefined' || iconStr == undefined) {
+    if (iconStr === 'undefined') {
       console.error('knowledge source icon "undefined" with id ', ks.id.value);
       localStorage.removeItem(`icon-${ks.id.value}`);
       return undefined;

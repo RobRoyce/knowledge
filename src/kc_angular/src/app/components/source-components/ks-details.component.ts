@@ -95,10 +95,12 @@ export class KsDetailsComponent {
     }, 5000);
   }
 
+  /** Show "Saved" only after the service saved the change. */
   update($event: KnowledgeSource) {
     if ($event) {
-      this.command.update([$event]);
-      this.onSaved();
+      this.command.update([$event]).then((saved) => {
+        if (saved) this.onSaved();
+      });
     }
   }
 }

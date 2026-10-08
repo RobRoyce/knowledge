@@ -36,8 +36,8 @@ import { SettingsService } from '@services/ipc-services/settings.service';
             <ng-template pTemplate="content">
               <div class="w-full h-full flex flex-column">
                 <div class="mb-3 text-500">
-                  Contains projects, sources, topics, metadata, and copies of
-                  imported files. Does not contain chat history, the inbox, UI
+                  Contains projects, sources, the inbox, topics, metadata, and
+                  copies of imported files. Does not contain chat history, UI
                   preferences, settings, or API keys.
                 </div>
                 <app-setting-template class="w-full" label="Export Library">
@@ -92,7 +92,8 @@ import { SettingsService } from '@services/ipc-services/settings.service';
                   </div>
                   <div id="restore-counts">
                     {{ count(preview.counts.projects, 'project') }},
-                    {{ count(preview.counts.sources, 'source') }},
+                    {{ count(preview.counts.sources, 'source')
+                    }}{{ inboxNote(preview.counts.inbox) }},
                     {{ count(preview.counts.assets, 'file') }} ({{
                       preview.counts.bytes / 1024 | number : '1.0-0'
                     }}
@@ -157,8 +158,9 @@ import { SettingsService } from '@services/ipc-services/settings.service';
             <ng-template pTemplate="content">
               <div class="w-full h-full flex flex-column">
                 <div class="mb-3 text-500">
-                  Chat history, the inbox, and UI preferences from this window's
-                  local storage. It does not hold projects, sources, or files.
+                  Chat history and UI preferences from this window's local
+                  storage. It does not hold projects, sources, the inbox, or
+                  files.
                 </div>
                 <app-setting-template class="w-full" label="Export Backup">
                   <div class="settings-input">
@@ -227,8 +229,15 @@ export class StorageSettingsComponent implements OnInit {
     this.form = formBuilder.group({});
   }
 
-  count(n: number, noun: string) {
-    return `${n} ${noun}${n === 1 ? '' : 's'}`;
+  count(n: number, noun: string, plural = `${noun}s`) {
+    return `${n} ${n === 1 ? noun : plural}`;
+  }
+
+  /** " (2 inbox entries)" when the backup has inbox entries. */
+  inboxNote(inbox = 0) {
+    return inbox > 0
+      ? ` (${this.count(inbox, 'inbox entry', 'inbox entries')})`
+      : '';
   }
 
   ngOnInit() {
@@ -295,7 +304,7 @@ export class StorageSettingsComponent implements OnInit {
         `Restored ${this.count(r.projects, 'project')}, ${this.count(
           r.sources,
           'source'
-        )}, ` +
+        )}${this.inboxNote(r.inbox)}, ` +
         `and ${this.count(r.assets, 'file')}. ` +
         'Knowledge reloads now.';
       this.notifications.success(

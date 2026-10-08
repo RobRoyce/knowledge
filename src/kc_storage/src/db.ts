@@ -58,6 +58,39 @@ const MIGRATIONS: Migration[] = [
       ) STRICT;
     `,
   },
+  {
+    // Inbox entries are sources with no project. Rebuild the table, because
+    // SQLite cannot remove NOT NULL from a column. No table refers to it.
+    version: 2,
+    sql: `
+      CREATE TABLE sources_v2 (
+        id TEXT PRIMARY KEY,
+        project_id TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        ingest_type TEXT NOT NULL,
+        asset_id TEXT REFERENCES assets (id) ON DELETE RESTRICT,
+        position INTEGER NOT NULL,
+        data TEXT NOT NULL CHECK (json_valid(data)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+
+      INSERT INTO sources_v2 SELECT
+        id, project_id, title, ingest_type, asset_id, position, data,
+        created_at, updated_at
+      FROM sources;
+
+      DROP TABLE sources;
+      ALTER TABLE sources_v2 RENAME TO sources;
+      CREATE INDEX sources_project ON sources (project_id, position);
+
+      CREATE TABLE preferences (
+        key TEXT PRIMARY KEY,
+        data TEXT NOT NULL CHECK (json_valid(data)),
+        updated_at TEXT NOT NULL
+      ) STRICT;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

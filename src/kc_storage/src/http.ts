@@ -9,6 +9,8 @@ import type { AddressInfo } from "node:net";
 import {
   ASSET_FILENAME_HEADER,
   ASSET_ORIGINAL_PATH_HEADER,
+  CREATE_ONLY_HEADER,
+  SESSION_TTL_HEADER,
   type ErrorResponse,
   type HealthResponse,
   type LibraryStatus,
@@ -33,6 +35,7 @@ import {
   badRequest,
   forbidden,
   notFound,
+  preconditionFailed,
   StorageError,
   tooLarge,
   unauthorized,
@@ -42,6 +45,7 @@ import {
   validId,
   validMediaType,
   validOriginalPath,
+  validPreference,
   validProject,
   validSource,
 } from "./validate.ts";
@@ -350,6 +354,10 @@ export function createServer(options: ServerOptions): http.Server {
         throw unauthorized("Missing or invalid bearer token or session.");
       }
       checkSessionRequest(req, method, session);
+      res.setHeader(
+        SESSION_TTL_HEADER,
+        String(Math.floor((sessions!.expiresAt(session) - Date.now()) / 1000))
+      );
     }
 
     if (resource === "projects" && !sub) {
@@ -380,6 +388,10 @@ export function createServer(options: ServerOptions): http.Server {
       }
       if (method === "PUT" && id) {
         const record = validSource(id, await readJson(req, maxJson));
+        const createOnly = req.headers[CREATE_ONLY_HEADER] === "*";
+        if (createOnly && library.getSource(record.id)) {
+          throw preconditionFailed(`Source ${record.id} already exists.`);
+        }
         const result = library.putSource(record);
         return send(res, result === "created" ? 201 : 200, {
           source: library.getSource(record.id),
@@ -445,6 +457,19 @@ export function createServer(options: ServerOptions): http.Server {
           fs.createReadStream(file).pipe(res);
           return;
         }
+      }
+    }
+
+    if (resource === "preferences" && id && !sub) {
+      const key = validId(id, "key");
+      if (method === "GET") {
+        const doc = library.getPreference(key);
+        if (!doc) throw notFound(`Preference ${key} does not exist.`);
+        return send(res, 200, { preference: doc });
+      }
+      if (method === "PUT") {
+        const data = validPreference(await readJson(req, maxJson));
+        return send(res, 200, { preference: library.putPreference(key, data) });
       }
     }
 

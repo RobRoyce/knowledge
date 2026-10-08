@@ -46,8 +46,8 @@ before you go offline: `node -e 'require("electron")'`.
 | Part | Location | Runs in | Owns |
 | --- | --- | --- | --- |
 | Frontend | `src/kc_angular` | Electron renderer or a browser | Navigation, presentation, editing, temporary UI state, API calls |
-| Backend (storage service) | `src/kc_storage` | Separate Node.js process | Projects, sources, managed files, validation, persistence, backup and restore, browser sessions, browser UI files |
-| Desktop | `src/kc_electron` | Electron main process | Windows, native file access by path, watched folders, thumbnails and file icons, embedded browser, drag-out, backend start and stop. Also the chat server (for now). |
+| Backend (storage service) | `src/kc_storage` | Separate Node.js process | Projects, sources, the inbox, managed files, browser preferences, validation, persistence, backup and restore, browser sessions, browser UI files |
+| Desktop | `src/kc_electron` | Electron main process | Windows, native file access by path, watched folders, thumbnails and file icons, embedded browser, Save as PDF, drag-out, backend start and stop. Also the chat server (for now). |
 | Contracts | `src/kc_contracts`, `src/kc_shared` | Shared | Data types, record mapping, default settings. No Angular or Electron imports. |
 
 The frontend reaches platform functions only through small capability
@@ -56,15 +56,32 @@ interfaces in `src/kc_angular/src/app/platform/`:
 | Interface | Desktop | Browser |
 | --- | --- | --- |
 | `Platform` | All features | Library features; desktop-only actions are hidden or disabled with a reason |
-| `BackendService` | IPC addresses, bearer tokens | Same origin, session cookie, CSRF header |
-| `SettingsStore` | Electron settings file | `localStorage` |
+| `BackendService` | IPC addresses, bearer tokens | Same origin, session cookie, CSRF header, session state |
+| `SettingsStore` | Electron settings file | Storage service (`/v1/preferences/browser-settings`) |
 | `WindowControls` | Minimize, maximize, zoom | Not available |
 | `NativeFiles` | Original file path, copy by path, open in default app | Not available |
 | `ManagedFiles` | `blob:` view, default app | Same-origin URL with filename, new tab |
+| `WebsitePdf` | Save a website as PDF | Not available |
 
 Both clients import files the same way: the user selects a `File`, the
 frontend uploads its bytes (`POST /v1/assets`), and the source stores the
 asset ID. IDs come from `crypto.randomUUID()`.
+
+Both clients write through one ordered queue in `StorageService`. Each
+write is an idempotent PUT or DELETE by ID. A write that the service
+refuses because of the session (401, 403), or that does not reach it, stays
+in the queue with all later writes until the connection is active again.
+The page warns before it closes while writes are queued.
+
+The inbox is sources with no project (`projectId: null`). A transfer to a
+project is one PUT that sets the project ID, so it cannot copy or lose the
+source. The inbox list removes an entry only after that write is saved.
+
+Remaining direct desktop calls: `ElectronIpcService` (embedded browser,
+thumbnails, file icons, local paths, show in folder, watched folders),
+`DragAndDropService` (drag-out), the display and import settings pages, and
+the chat server. Each one is unreachable in the browser or behind a
+`Platform` check.
 
 Designs: [docs/storage-service.md](docs/storage-service.md),
 [docs/desktop-storage-completion.md](docs/desktop-storage-completion.md),
@@ -74,14 +91,18 @@ Designs: [docs/storage-service.md](docs/storage-service.md),
 
 | Data | Owner | Location in a profile |
 | --- | --- | --- |
-| Projects, sources, topics, metadata | Storage service | `data/library/library.sqlite` |
+| Projects, sources, inbox, topics, metadata | Storage service | `data/library/library.sqlite` |
 | Copies of imported files | Storage service | `data/library/assets/` |
-| Chat history, inbox, current project, UI preferences, favicon cache | Renderer | `userData` (local storage) |
+| Browser client settings | Storage service | `data/library/library.sqlite` (not in backups) |
+| Chat history, current project, UI preferences, favicon cache | Renderer | `userData` (local storage) |
 | Settings | Electron | `settings/knowledge.settings.json` |
 | Extracted-text cache, API key file | Electron chat server | `data/storage/sources/`, `data/openai.encrypted` |
 
 The app does not read or write the old local-storage project keys
 (`kc-projects`, `<projectId>`, `ks-<id>`). Use the migration to import them.
+An inbox that an earlier version kept in local storage (`ingest-queue`)
+moves to the storage service at the next start, once. Entries that the
+service already has stay unchanged.
 
 ## Instances and local servers
 
@@ -163,23 +184,27 @@ yarn browser
 
 `yarn browser` starts the storage service with the built UI and prints a
 one-time launch link, for example
-`http://127.0.0.1:53124/#launch=...`. Open it in Chrome. Press Enter in the
+`http://127.0.0.1:45120/#launch=...`. Open it in Chrome. Press Enter in the
 terminal for a new link. Press Ctrl+C to stop.
 
 Options: `--data-dir <dir>` (default `.dev-profiles/browser/library`),
-`--web-root <dir>` (default `src/kc_angular/dist/main`), `--open` (macOS:
-open the default browser).
+`--web-root <dir>` (default `src/kc_angular/dist/main`), `--port <n>`,
+`--session-idle-minutes <n>`, `--open` (macOS: open the default browser).
+
+The port comes from the library path (41000-48999), so one library always
+opens at the same address. The browser keeps UI preferences per address.
+If the port is in use, the launcher stops and asks for `--port`.
 
 What works in the browser: projects, file upload (PDF, text, and other
 files), the Document view for PDF, text, and images, topics and metadata,
-search, opening managed files in a new tab, library export and restore,
-chat and preferences backup (browser local storage).
+search, opening managed files in a new tab, preview of PDF, text, and
+images, the inbox, library export and restore, settings, logout.
 
 Desktop only (hidden or disabled in the browser, with a reason): saving
-websites and the example websites, chat, the built-in browser, watched
-folders and extension settings, window controls, opening files in other
-apps, showing files in Finder, file thumbnails and file icons, dragging
-files out.
+websites and the example websites, Save as PDF, chat, the built-in browser
+(website Preview opens a new tab instead), watched folders and extension
+settings, window controls, opening files in other apps, showing files in
+Finder, file thumbnails, file and website icons, dragging files out.
 
 ### Browser session
 
@@ -191,7 +216,15 @@ files out.
   a browser marks as cross-site or same-site (another local port) are
   refused.
 - A session ends after 30 minutes without requests, after 12 hours, on
-  `DELETE /v1/session`, or when the service stops.
+  `DELETE /v1/session`, or when the service stops. Each session response
+  carries `X-Knowledge-Session-TTL`, so the page knows when it ends.
+- When the session ends or is refused, a dialog blocks the app. Unsaved
+  changes stay in the tab. Press Enter in the launcher terminal, paste the
+  new link, and select Continue (or open the link in another tab and select
+  Check again). The queued changes are then saved once, in order.
+- Log out (title bar) saves queued changes first, or asks before it
+  discards them. It ends the session, removes library caches from the
+  page, and reloads the page without library data.
 - The bearer token is never printed or sent to the browser. The launch
   code appears once in the terminal and in the first URL fragment.
 - This is a local, single-user setup. It is not a hosted deployment.
@@ -280,8 +313,8 @@ application backup.
 
 | Backup | Contains | Does not contain | Restore |
 | --- | --- | --- | --- |
-| Library (`knowledge-library-<date>.tar`) | Projects, sources, topics, metadata, copies of imported files (SHA-256 for each) | Chat history, inbox, UI preferences, settings, API keys, extracted-text cache | Settings > Backup > Restore Library, or `yarn storage restore` |
-| Chat and preferences (`knowledge-backup-<date>.json`) | Renderer local storage: chat history, inbox, UI preferences | Projects, sources, files, settings | Settings > Backup > Restore |
+| Library (`knowledge-library-<date>.tar`, format version 2) | Projects, sources, inbox entries, topics, metadata, copies of imported files (SHA-256 for each) | Chat history, UI preferences, settings, API keys, extracted-text cache | Settings > Backup > Restore Library, or `yarn storage restore`. Version 1 backups (no inbox) also restore. |
+| Chat and preferences (`knowledge-backup-<date>.json`) | Renderer local storage: chat history, UI preferences | Projects, sources, inbox, files, settings | Settings > Backup > Restore |
 
 ### Restore a library in the app
 
@@ -334,7 +367,13 @@ Stop the app first. The command uses the same checks as the app.
 | `yarn e2e-browser` | The browser client in Google Chrome, no Electron (below) | Google Chrome, `yarn build-angular-dev` first |
 
 The end-to-end tests start the real app with new, empty profiles in
-`e2e/.output/<run>/`. They never use your normal profile.
+`e2e/.output/<run>/`. They never use your normal profile. The desktop
+window stays invisible and never takes focus (`KC_HIDDEN_WINDOW=1`, set by
+`e2e/lib.mjs`). To watch a run: `KC_E2E_SHOW=1 yarn e2e`. Chrome runs
+headless.
+
+Run one file with `node --test <file>`; select one test with
+`--test-name-pattern="<part of the name>"`.
 
 - `e2e/workflow.e2e.mjs`: create a project, save a link (local fixture site),
   import a PDF and a text file, annotate, search, restart, delete the
@@ -343,8 +382,12 @@ The end-to-end tests start the real app with new, empty profiles in
   restore it into a second profile through Settings > Backup, and show the
   PDF there.
 - `e2e/embedded-browser.e2e.mjs`: opens a website source in the desktop
-  Browser tab (`WebContentsView`), checks its URL, resizing, and navigation
-  state, and checks that closing removes it.
+  Browser tab (`WebContentsView`), follows a link to a second page, goes
+  Back and Forward with the app's buttons, checks that the view stays inside
+  the window after a resize, and checks that closing removes it.
+- `e2e/inbox.e2e.mjs`: an inbox in renderer local storage (earlier
+  versions) moves to the storage service once, with its file copied, and
+  inbox entries survive restarts without duplicates.
 - `e2e/isolation.e2e.mjs`: two profiles at the same time get different chat
   and storage addresses and tokens. Each server rejects the other
   instance's requests. A second start of the same profile exits.
@@ -368,7 +411,18 @@ The end-to-end tests start the real app with new, empty profiles in
   remain, opens the managed files in new tabs, exports the library, and
   restores it through the UI into a second library. It also checks
   requests without a session, reads and writes from another local site,
-  and that the launcher does not print the bearer token.
+  and that the launcher does not print the bearer token. A file stays in
+  the inbox through export and restore. Console errors and page errors
+  are checked at each stage.
+- `e2e/browser/inbox.e2e.mjs`: inbox entries and a changed setting survive
+  a restart on a different port; a transfer that the service refuses
+  (broken session) stays in the inbox and is saved once after a new
+  session; a repeated transfer adds nothing; Save as PDF is disabled with a
+  reason.
+- `e2e/browser/session.e2e.mjs`: a session that ends from inactivity blocks
+  changes and keeps an unsaved edit, which completes once after a new
+  session; logout saves a slow queued write first, then the page has no
+  access, no library text, no session cookie, and no library caches.
 
 Test files are in `e2e/fixtures/`. To delete old test output, delete
 `e2e/.output/`.
@@ -391,6 +445,10 @@ curl -s -X POST http://127.0.0.1:7777 -d '{"op":"close"}'
 - Library restore works only into an empty library.
 - Chat history, UI preferences, and settings are separate from the library
   and its backup.
+- Browser UI preferences other than settings (theme, table layout) belong
+  to the browser address. They survive restarts only on the same port.
+- Resizing the desktop window reopens the built-in browser at the source
+  URL. Its Back and Forward history is lost.
 - A file source that had no original file at migration has no managed copy.
   It still depends on its original path.
 - Packaging is verified only for macOS arm64 (unsigned). A pinned runtime
@@ -399,7 +457,7 @@ curl -s -X POST http://127.0.0.1:7777 -d '{"op":"close"}'
 - Signed and notarized releases are not verified. Signing must also sign
   the bundled Node.js binary.
 - AI chat with a real API key is not verified.
-- Electron 26 and Angular 14 are outside their supported versions.
+- Angular 14 is outside its supported versions.
 
 Follow-up work is in [docs/follow-ups.md](docs/follow-ups.md).
 

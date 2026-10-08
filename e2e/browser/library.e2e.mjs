@@ -5,8 +5,9 @@
  * with a scratch library, opens the printed launch link in Chrome, and runs:
  * create a project, upload a PDF and a text file, show both, annotate,
  * search, restart the service and reopen the browser, open the managed
- * files, export the library, and restore it into a second, empty library.
- * It also checks unauthorized and cross-origin requests.
+ * files, keep a file in the inbox, export the library, and restore it
+ * into a second, empty library. It also checks unauthorized and
+ * cross-origin requests, and console and page errors at each stage.
  *
  * Build first: yarn build-angular-dev
  * Run:         yarn e2e-browser
@@ -16,104 +17,23 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import { chromium } from "playwright-core";
-import { FIXTURES, REPO, newRun, startFixtureSite } from "../lib.mjs";
+import { FIXTURES, newRun, startFixtureSite } from "../lib.mjs";
 import * as ui from "../steps.mjs";
+import {
+  assertNoErrors,
+  counts,
+  openBrowser,
+  readLibrary,
+  startLauncher,
+} from "./helpers.mjs";
 
 const PROJECT = "Browser Project";
 const PDF = "recovery-fixture.pdf";
 const TXT = "recovery-note.txt";
+const PENDING = "pending-inbox.txt";
 
-/** Start the launcher. Resolves with its first launch link and output. */
-async function startLauncher(dataDir, log) {
-  const child = spawn(
-    process.execPath,
-    [path.join(REPO, "scripts/start-browser.mjs"), "--data-dir", dataDir],
-    {
-      cwd: REPO,
-      stdio: ["pipe", "pipe", "pipe"],
-    }
-  );
-  let output = "";
-  const write = (d) => {
-    output += d;
-    fs.appendFileSync(log, d);
-  };
-  child.stdout.on("data", write);
-  child.stderr.on("data", write);
-  const url = await new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`No launch link:\n${output}`)),
-      30000
-    );
-    child.stdout.on("data", () => {
-      const m = output.match(
-        /http:\/\/127\.0\.0\.1:\d+\/#launch=[A-Za-z0-9_-]+/
-      );
-      if (m) {
-        clearTimeout(timer);
-        resolve(m[0]);
-      }
-    });
-    child.on("exit", (code) =>
-      reject(new Error(`Launcher exited (${code}):\n${output}`))
-    );
-  });
-  return {
-    url,
-    origin: new URL(url).origin,
-    output: () => output,
-    async stop() {
-      if (child.exitCode !== null) return;
-      child.kill("SIGINT");
-      await new Promise((r) => child.on("exit", r));
-    },
-  };
-}
-
-/** Projects and sources through the page's own session (same origin). */
-function readLibrary(page) {
-  return page.evaluate(async () => {
-    const get = (r) => fetch(`/v1/${r}`).then((res) => res.json());
-    const { projects } = await get("projects");
-    const { sources } = await get("sources");
-    return projects.map((p) => ({
-      name: p.name,
-      sources: sources
-        .filter((s) => s.projectId === p.id)
-        .map((s) => ({
-          title: s.title,
-          type: s.ingestType,
-          assetId: s.assetId,
-          originalPath: s.data.reference?.source?.file?.path ?? null,
-          topics: s.data.topics ?? [],
-          annotations: (s.data.meta ?? [])
-            .filter((m) => m.key === "annotation")
-            .map((m) => m.value),
-        }))
-        .sort((a, b) => a.title.localeCompare(b.title)),
-    }));
-  });
-}
-
-async function openBrowser(url) {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1600, height: 1000 },
-    acceptDownloads: true,
-  });
-  const page = await context.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("dialog", (d) => {
-    errors.push(`dialog: ${d.message()}`);
-    d.dismiss();
-  });
-  await page.goto(url);
-  await page.waitForSelector("app-create button", { timeout: 30000 });
-  return { browser, context, page, errors };
-}
+/** A fresh library has no saved browser settings yet. */
+const FIRST_START = [/\/v1\/preferences\/browser-settings$/];
 
 test(
   "library workflow in Chrome without Electron",
@@ -123,8 +43,6 @@ test(
     const libraryA = path.join(run, "library-a");
     const libraryB = path.join(run, "library-b");
     const log = path.join(run, "launcher.log");
-    const shot = (page, name) =>
-      page.screenshot({ path: path.join(run, `${name}.png`) });
     const pdfBytes = fs.readFileSync(path.join(FIXTURES, PDF));
     const txtBytes = fs.readFileSync(path.join(FIXTURES, TXT));
     const other = await startFixtureSite();
@@ -170,7 +88,6 @@ test(
           )
         );
         await b.page.waitForTimeout(1500);
-        await shot(b.page, `a-document-${name}`);
         await ui.closeDialog(b.page);
       }
 
@@ -189,11 +106,12 @@ test(
       );
 
       const library = await readLibrary(b.page);
-      assert.equal(library.length, 1);
-      const note = library[0].sources.find((s) => s.title === TXT);
+      assert.equal(library.projects.length, 1);
+      assert.deepEqual(library.inbox, []);
+      const note = library.projects[0].sources.find((s) => s.title === TXT);
       assert.deepEqual(note.topics, ["browsertopic"]);
       assert.deepEqual(note.annotations, ["browser note"]);
-      for (const s of library[0].sources) {
+      for (const s of library.projects[0].sources) {
         assert.match(s.assetId, /^[0-9a-f-]{36}$/);
         assert.equal(s.originalPath, "", "the browser sends no local path");
       }
@@ -250,18 +168,16 @@ test(
       await attacker.close();
       assert.equal(attack.read, "blocked");
       assert.equal(attack.write, "blocked");
-      const status = await b.page.evaluate(() =>
-        fetch("/v1/library").then((r) => r.json())
-      );
       assert.deepEqual(
-        status.counts,
-        { projects: 1, sources: 2, assets: 2 },
+        await counts(b.page),
+        { projects: 1, sources: 2, inbox: 0, assets: 2 },
         "no planted records or files"
       );
 
       // The launcher never prints the bearer token
       assert.doesNotMatch(launcher.output(), /[0-9a-f]{64}/);
-      await b.browser.close();
+      assertNoErrors(b.errors, "before the restart", FIRST_START);
+      await b.close();
       b = undefined;
 
       // 7. Restart the service and reopen the browser
@@ -279,7 +195,7 @@ test(
         [PDF, pdfBytes],
         [TXT, txtBytes],
       ]) {
-        const assetId = library[0].sources.find(
+        const assetId = library.projects[0].sources.find(
           (s) => s.title === name
         ).assetId;
         const popup = b.context.waitForEvent("page");
@@ -300,13 +216,30 @@ test(
         await tab.close();
       }
 
+      // A file stays in the inbox. The backup must keep it.
+      const pending = path.join(run, PENDING);
+      fs.writeFileSync(pending, "pending inbox file");
+      await b.page
+        .locator("app-create input[type=file]")
+        .setInputFiles(pending);
+      await ui.openInbox(b.page);
+      await b.page.getByText(PENDING).first().waitFor({ timeout: 15000 });
+      await b.page.waitForTimeout(1500);
+      const withInbox = await readLibrary(b.page);
+      assert.deepEqual(
+        withInbox.inbox.map((s) => s.title),
+        [PENDING]
+      );
+      assertNoErrors(b.errors, "after the restart");
+
       // 10. Export the library through the UI
       await ui.openSettings(b.page, "Backup");
       const download = b.page.waitForEvent("download");
       await b.page.locator("button", { hasText: "Export Library" }).click();
       const tar = path.join(run, "library.tar");
       await (await download).saveAs(tar);
-      await b.browser.close();
+      assertNoErrors(b.errors, "during export");
+      await b.close();
       b = undefined;
       await launcher.stop();
 
@@ -314,23 +247,35 @@ test(
       launcher = await startLauncher(libraryB, log);
       b = await openBrowser(launcher.url);
       const restore = await ui.restoreLibrary(b.page, tar);
-      assert.match(restore.preview, /1 project, 2 sources, 2 files/);
+      assert.match(
+        restore.preview,
+        /1 project, 3 sources \(1 inbox entry\), 3 files/
+      );
       assert.match(
         restore.result,
-        /Restored 1 project, 2 sources, and 2 files/
+        /Restored 1 project, 3 sources \(1 inbox entry\), and 3 files/
       );
-      assert.deepEqual(await readLibrary(b.page), library);
+      assert.deepEqual(await readLibrary(b.page), withInbox);
+
       await ui.selectProject(b.page, PROJECT);
       await ui.openTable(b.page);
       await ui.openSource(b.page, PDF);
       await ui.openDocumentTab(b.page);
       await b.page.locator("source-document embed").waitFor({ timeout: 15000 });
       await b.page.waitForTimeout(1500);
-      await shot(b.page, "b-restored-pdf");
+      await ui.closeDialog(b.page);
 
-      assert.deepEqual(b.errors, [], "page errors or dialogs");
+      // The restored inbox shows the entry, and its file has the same bytes
+      await ui.openInbox(b.page);
+      await b.page.getByText(PENDING).first().waitFor({ timeout: 15000 });
+      const restoredFile = await b.context.request.get(
+        `${launcher.origin}/v1/assets/${withInbox.inbox[0].assetId}/content/${PENDING}`
+      );
+      assert.equal(await restoredFile.text(), "pending inbox file");
+
+      assertNoErrors(b.errors, "after the restore", FIRST_START);
     } finally {
-      if (b) await b.browser.close();
+      if (b) await b.close();
       if (launcher) await launcher.stop();
       other.close();
     }

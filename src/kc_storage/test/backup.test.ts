@@ -99,6 +99,7 @@ test("backup restores into a different directory without the original files", as
     assert.deepEqual(JSON.parse(restored.stdout).restored, {
       projects: 2,
       sources: 3,
+      inbox: 0,
       assets: 2,
     });
 
@@ -175,8 +176,8 @@ test("the manifest holds no credentials and states its format", async () => {
       .toString()
   );
   assert.equal(manifest.format, "knowledge-library-backup");
-  assert.equal(manifest.version, 1);
-  assert.equal(manifest.service.schemaVersion, 1);
+  assert.equal(manifest.version, 2);
+  assert.equal(manifest.service.schemaVersion, 2);
   assert.deepEqual(
     manifest.assets.map((a: any) => a.path).sort(),
     manifest.assets.map((a: any) => `assets/${a.id}`).sort()

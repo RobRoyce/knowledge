@@ -109,14 +109,27 @@ export function validSource(pathId: string, input: unknown): SourceRecord {
     throw badRequest(`ingestType must be one of: ${INGEST_TYPES.join(", ")}.`);
   }
   const asset = body["assetId"];
+  const project = body["projectId"];
+  if (project === undefined) {
+    throw badRequest("projectId is required. Use null for the inbox.");
+  }
   return {
     id,
-    projectId: validId(body["projectId"], "projectId"),
+    projectId: project === null ? null : validId(project, "projectId"),
     title: text(body["title"] ?? "", "title", 4096, true),
     ingestType,
     assetId: asset === null || asset === undefined ? null : validAssetId(asset),
     data: object(body["data"], "data"),
   };
+}
+
+/** A preference document body: a JSON object up to 64 KiB. */
+export function validPreference(input: unknown): JsonObject {
+  const body = object(input, "body");
+  if (JSON.stringify(body).length > 64 * 1024) {
+    throw badRequest("A preference document must be at most 64 KiB.");
+  }
+  return body;
 }
 
 /** A display filename. Path separators and control characters are removed. */

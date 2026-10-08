@@ -201,7 +201,8 @@ export class HistoryComponent {
           this.router.navigate([
             'app',
             'inbox',
-            this.projects.getCurrentProjectId()?.value,
+            // No project yet: the same placeholder as the default route
+            this.projects.getCurrentProjectId()?.value ?? 'undefined',
           ]);
           return;
         }

@@ -20,13 +20,17 @@ const P1 = "11111111-1111-4111-8111-111111111111";
 /**
  * A renderer backup with the record shapes found in real profiles:
  * embedded sources, a differing ks- copy, a standalone ks- record,
- * an orphan ks- record, a missing file, derived fields, and other keys.
+ * an orphan ks- record, a missing file, derived fields, an inbox with
+ * a file and a website (plus an ID that is also in a project), and other
+ * keys.
  */
 function legacyBackup(work: string) {
   const pdf = path.join(work, "paper.pdf");
   const txt = path.join(work, "note.txt");
+  const pending = path.join(work, "pending.txt");
   fs.copyFileSync(path.join(FIXTURES, "recovery-fixture.pdf"), pdf);
   fs.copyFileSync(path.join(FIXTURES, "recovery-note.txt"), txt);
+  fs.writeFileSync(pending, "pending inbox file");
   const gone = path.join(work, "deleted.pdf");
 
   const fileSource = (
@@ -111,7 +115,24 @@ function legacyBackup(work: string) {
     // UI preference whose key looks like a source key
     "ks-table-rows": "10",
     theme: JSON.stringify({ name: "dark" }),
-    "ingest-queue": "[]",
+    "ingest-queue": JSON.stringify([
+      {
+        ...fileSource("inbox-file", "pending.txt", pending, "text/plain", {
+          icon: undefined,
+          thumbnail: undefined,
+        }),
+        associatedProject: undefined,
+      },
+      {
+        id: { value: "inbox-web" },
+        title: "Pending Site",
+        ingestType: "website",
+        accessLink: "https://example.org/",
+        topics: ["later"],
+      },
+      // Already in a project: the project copy wins
+      { ...sources[0], title: "Inbox copy of web-1" },
+    ]),
     "current-project": P1,
   };
 
@@ -125,7 +146,7 @@ function legacyBackup(work: string) {
       data,
     })
   );
-  return { file, pdf, txt };
+  return { file, pdf, txt, pending };
 }
 
 function migrate(dataDir: string, input: string, env = {}) {
@@ -179,15 +200,18 @@ test("migration imports, reports, and preserves data", async () => {
   assert.deepEqual(r.sources.imported.map((i: any) => i.id).sort(), [
     "extra-1",
     "gone-1",
+    "inbox-file",
+    "inbox-web",
     "pdf-1",
     "txt-1",
     "web-1",
   ]);
   assert.deepEqual(
     r.sources.skipped.map((i: any) => i.id),
-    ["orphan-1"]
+    ["orphan-1", "web-1"]
   );
-  assert.equal(r.files.copied.length, 2);
+  assert.deepEqual(r.inbox, ["inbox-file", "inbox-web"]);
+  assert.equal(r.files.copied.length, 3);
   assert.deepEqual(
     r.files.missing.map((m: any) => m.sourceId),
     ["gone-1"]
@@ -199,7 +223,6 @@ test("migration imports, reports, and preserves data", async () => {
   assert.deepEqual(r.rendererKeys, [
     "chat-web-1",
     "current-project",
-    "ingest-queue",
     "ks-table-rows",
     "theme",
   ]);
@@ -232,13 +255,30 @@ test("migration imports, reports, and preserves data", async () => {
   assert.equal(asset.mediaType, "application/pdf");
   assert.ok((await api.content(asset.id)).bytes.equals(fs.readFileSync(pdf)));
 
+  // Inbox entries keep their order, metadata, and managed file
+  const all = (await api.get("/v1/sources")).body.sources;
+  const inbox = all.filter((s: any) => s.projectId === null);
+  assert.deepEqual(
+    inbox.map((s: any) => s.id),
+    ["inbox-file", "inbox-web"]
+  );
+  assert.deepEqual(inbox[1].data.topics, ["later"]);
+  assert.equal(byId["web-1"].title, "Fixture Site");
+  const pendingAsset = (await api.get(`/v1/assets/${inbox[0].assetId}`)).body
+    .asset;
+  assert.equal(pendingAsset.filename, "pending.txt");
+  assert.equal(
+    (await api.content(pendingAsset.id)).bytes.toString(),
+    "pending inbox file"
+  );
+
   const projects = (await api.get("/v1/projects")).body.projects;
   assert.equal(projects[0].data.icon, "pi pi-folder");
   assert.equal(projects[0].data.description, "from renderer");
   await svc.stop();
 });
 
-test("a repeated migration creates no duplicates and keeps assets of deleted originals", () => {
+test("a repeated migration creates no duplicates and keeps assets of deleted originals", async () => {
   const work = tempDir("rep-work");
   const dataDir = tempDir("rep-data");
   const { file, pdf, txt } = legacyBackup(work);
@@ -253,6 +293,13 @@ test("a repeated migration creates no duplicates and keeps assets of deleted ori
   assert.equal(again.status, "completed");
   assert.equal(again.projects.unchanged.length, 1);
   assert.equal(again.sources.unchanged.length, 5);
+  assert.deepEqual(again.inbox, []);
+  assert.deepEqual(again.sources.skipped.map((i: any) => i.id).sort(), [
+    "inbox-file",
+    "inbox-web",
+    "orphan-1",
+    "web-1",
+  ]);
   assert.equal(again.sources.imported.length + again.sources.updated.length, 0);
   assert.equal(again.files.reused.length, 2);
   assert.deepEqual(counts(), before);
@@ -261,6 +308,19 @@ test("a repeated migration creates no duplicates and keeps assets of deleted ori
   // Originals deleted: the sources keep their managed copies
   fs.rmSync(pdf);
   fs.rmSync(txt);
+  // An inbox entry moved to a project stays there on a repeated run
+  const svc = await startService(dataDir);
+  const api = client(svc);
+  const moved = (await api.get("/v1/sources")).body.sources.find(
+    (s: any) => s.id === "inbox-web"
+  );
+  assert.equal(
+    (await api.put("/v1/sources/inbox-web", { ...moved, projectId: P1 }))
+      .status,
+    200
+  );
+  await svc.stop();
+
   const third = report(migrate(dataDir, file).summary);
   assert.equal(third.files.kept.length, 2);
   assert.deepEqual(
@@ -269,6 +329,14 @@ test("a repeated migration creates no duplicates and keeps assets of deleted ori
   );
   assert.equal(third.sources.unchanged.length, 5);
   assert.deepEqual(counts(), before);
+  const db = new DatabaseSync(path.join(dataDir, "library.sqlite"), {
+    readOnly: true,
+  });
+  const row = db
+    .prepare("SELECT project_id FROM sources WHERE id = 'inbox-web'")
+    .get() as any;
+  db.close();
+  assert.equal(row.project_id, P1);
 });
 
 test("a failed migration changes nothing and a later run succeeds", () => {
@@ -291,7 +359,7 @@ test("a failed migration changes nothing and a later run succeeds", () => {
 
   const ok = migrate(dataDir, file);
   assert.equal(ok.status, 0);
-  assert.equal(count(dataDir, "sources"), 5);
+  assert.equal(count(dataDir, "sources"), 7);
 });
 
 test("invalid input is rejected before any write", () => {
@@ -336,7 +404,7 @@ test("dry run reports without writing", () => {
   assert.equal(result.status, 0);
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.status, "dry-run");
-  assert.equal(summary.sources.imported, 5);
+  assert.equal(summary.sources.imported, 7);
   assert.equal(count(dataDir, "sources"), 0);
   assert.ok(!fs.existsSync(path.join(dataDir, "migrations")));
 });
@@ -347,8 +415,8 @@ test("the documented rollback restores the pre-migration state", async () => {
   const { file } = legacyBackup(work);
 
   const r = report(migrate(dataDir, file).summary);
-  assert.equal(count(dataDir, "sources"), 5);
-  assert.equal(assetFiles(dataDir).length, 2);
+  assert.equal(count(dataDir, "sources"), 7);
+  assert.equal(assetFiles(dataDir).length, 3);
 
   // Rollback: with the service stopped, replace the database with the snapshot
   for (const suffix of ["", "-wal", "-shm"]) {
@@ -361,6 +429,6 @@ test("the documented rollback restores the pre-migration state", async () => {
   const api = client(svc);
   assert.deepEqual((await api.get("/v1/projects")).body.projects, []);
   assert.deepEqual(assetFiles(dataDir), []);
-  assert.match(svc.stderr(), /removed 2 unreferenced or temporary files/);
+  assert.match(svc.stderr(), /removed 3 unreferenced or temporary files/);
   await svc.stop();
 });

@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
 import { ManagedFiles } from '@app/platform/managed-files';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
@@ -35,6 +36,16 @@ import { KsCommandService } from '@services/command-services/ks-command.service'
 export interface KsPreviewInput {
   ks: KnowledgeSource;
 }
+
+/** Types that the storage service shows inline (see kc_storage http.ts). */
+const INLINE_PREVIEW = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'text/',
+];
 
 @Component({
   selector: 'app-ks-preview',
@@ -145,6 +156,7 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
     private ingest: IngestService,
     private clipboard: Clipboard,
     private notifications: NotificationsService,
+    private platform: Platform,
     private managedFiles: ManagedFiles
   ) {
     this.ks = config.data.ks;
@@ -163,6 +175,9 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    if (this.fileViewConfig?.url) {
+      this.managedFiles.release(this.fileViewConfig.url);
+    }
     this.close();
   }
 
@@ -198,8 +213,14 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
           this.ks.assetId,
           this.ks.reference?.source?.file?.filename ?? this.ks.title
         );
-      } else {
+      } else if (this.platform.has('openInDefaultApp')) {
         this.ipc.openLocalFile(this.fileViewConfig.filePath);
+      } else {
+        this.notifications.warn(
+          'Preview',
+          'Not Available',
+          'This file has no copy in the library. Opening a file by its local path is available in the desktop app.'
+        );
       }
     }
   }
@@ -252,6 +273,10 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
   previewFile() {
     // Make sure browserViewConfig is undefined
     this.browserViewConfig = undefined;
+    if (this.ks.assetId) {
+      this.previewManagedFile(this.ks.assetId);
+      return;
+    }
     if (
       !this.ks.reference.source.file ||
       typeof this.ks.accessLink !== 'string'
@@ -288,6 +313,38 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
       );
       this.ref.close();
     }
+  }
+
+  /**
+   * Show the library copy of the file. Desktop and browser use the same
+   * copy. Types that the service does not show inline open outside.
+   */
+  private previewManagedFile(assetId: string) {
+    const file = this.ks.reference.source.file;
+    const type = file?.type ?? '';
+    const filename = file?.filename ?? this.ks.title;
+    if (!INLINE_PREVIEW.some((t) => type.startsWith(t))) {
+      this.notifications.warn(
+        'Source Preview',
+        'No Preview',
+        `Knowledge cannot preview ${
+          type || 'this'
+        } files. Opening the file instead.`
+      );
+      setTimeout(() => this.ref.close());
+      this.managedFiles.open(assetId, filename).catch(() => undefined);
+      return;
+    }
+    this.managedFiles
+      .viewUrl(assetId, filename)
+      .then((url) => {
+        this.fileViewConfig = { filePath: filename, url, isDialog: true };
+        this.viewReady = true;
+      })
+      .catch((e) => {
+        this.notifications.error('Source Preview', 'File Not Loaded', `${e}`);
+        setTimeout(() => this.ref.close());
+      });
   }
 
   previewSupportedType(type: string) {
