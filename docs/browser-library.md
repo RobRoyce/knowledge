@@ -56,10 +56,11 @@ platform is chosen once at startup: desktop if the preload bridge exists.
 | --- | --- | --- | --- |
 | `Platform` | Which optional features exist | All features | Library features only |
 | `BackendConnection` | Address and request authorization for the library API (and chat) | IPC info, bearer token | Same origin, session cookie, CSRF header |
-| `SettingsStore` | Load, save, and default settings | Electron settings file (IPC) | `localStorage`, shared defaults |
+| `SettingsStore` | Load, save, and default settings | Electron settings file (IPC) | Storage service preference document, shared defaults |
 | `WindowControls` | Minimize, maximize, zoom | IPC | Not available (controls hidden) |
 | `NativeFiles` | Original path of a selected file, copy a file by path, open in default app, show in folder | IPC | Not available |
 | `ManagedFiles` | URL to show or open a managed file | `blob:` URL from an authorized fetch | Direct same-origin URL with the filename |
+| `WebsitePdf` | Save a website as PDF | Hidden window and `printToPDF` (IPC) | Not available, with a reason |
 
 Other changes:
 
@@ -106,6 +107,16 @@ for a hosted service.
   sandbox `Content-Security-Policy`, except PDF. So imported files cannot
   run scripts with the application's origin.
 - The browser shows PDFs with its own viewer.
+
+## Changes after review (2026-10-08)
+
+- The inbox and browser settings moved to the storage service. The launcher
+  keeps one port per library.
+- `BackendService` tracks the connection state. A session dialog blocks the
+  app when the session ends; queued writes are saved after a new session.
+  The title bar has Log out.
+- Save as PDF, website Preview, file Preview, Chat, Show in files, and
+  website icons have a browser behavior or a clear unavailable state.
 
 ## Tests
 

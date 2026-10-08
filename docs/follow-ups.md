@@ -1,17 +1,17 @@
 # Follow-up Work
 
-Work found during the recovery, storage, desktop, browser, and Electron
-milestones. Not started.
+Work found during the recovery, storage, desktop, browser, Electron, and
+review-fix milestones. Not started.
 
 ## Storage service
 
 | Item | Reason |
 | --- | --- |
-| Orphan asset cleanup policy | Deleting a source keeps its managed file. Files are uploaded when selected, so a file removed from the inbox also leaves a managed file. Only files without records after a rollback, crash, or failed restore are removed. |
+| Orphan asset cleanup policy | Deleting a source keeps its managed file. Files are uploaded when selected, so a file removed from the inbox also leaves a managed file. An upload whose response is lost (network failure) can also leave one, because uploads repeat only after 401 or 403. Only files without records after a rollback, crash, or failed restore are removed. |
 | Restore into a library that has records (merge or replace) | Restore refuses a non-empty library now. |
 | Move the extracted-text cache into the service | The chat server keeps it in `data/storage/sources/`, outside the library. |
 | Thumbnails in the service | Electron makes thumbnails from a local copy of the managed file. |
-| Move favicon cache, inbox, and chat history out of local storage | They stay in the renderer for this milestone. |
+| Move favicon cache and chat history out of local storage | The inbox and browser settings moved to the service. These stay in the renderer. |
 | Stronger local access control | The token stops requests without it. Programs that run as the same OS user can read it. |
 
 ## Packaging and release
@@ -33,10 +33,10 @@ milestones. Not started.
 | Upgrade Angular 14 and TypeScript 4.8 | Node.js 24 is outside Angular 14's supported range. |
 | Bind the browser extension server to loopback with a token | It listens on port 9000 on all interfaces when enabled. |
 | Replace the fixed API key passphrase | The key file is obfuscated, not encrypted. |
-| Root `postinstall` key is outside `scripts` | It never runs. Remove it or move it. |
-| Fresh-profile route error (`inbox/undefined`) | Cosmetic error in the log on first start. |
 | Desktop PDF viewer title shows the blob ID | The desktop shows managed PDFs from a `blob:` URL. The browser client shows the filename. |
 | Select a project after a library restore | After restore, no project is selected. The user selects one in the tree. |
+| Keep the built-in browser through a window resize | `SourceBrowserComponent` closes the view on resize and opens the source URL again. Send new bounds to the existing view instead, so Back and Forward history stays. |
+| Back and Forward clicks less than 250 ms apart are ignored | `ElectronIpcService` drops them on purpose. Queue them instead. |
 
 ## Browser client
 
@@ -44,8 +44,11 @@ milestones. Not started.
 | --- | --- |
 | Save websites in the browser | Needs website fetching and extraction in the backend. |
 | Chat in the browser | Needs the chat server in the backend. |
-| Browser settings and inbox | Kept in browser local storage, separate from the desktop. |
 | Other browsers | Only Google Chrome is tested. |
+| UI preferences other than settings | Theme, table, and graph layout stay in local storage of one browser address. The launcher keeps one port per library; `--port` gives a new address without them. |
+| Inbox in local storage of an earlier browser address | Not recoverable. A page can read only its own address. The desktop inbox and the current address are moved. |
+| Logout while the session already ended | The session dialog covers the Log out button. The session has ended anyway; queued changes stay until a new session or a page close (with a warning). |
+| Desktop settings | Still the Electron settings file, separate from the browser settings in the service. |
 
 ## Features (separate tasks)
 
@@ -106,9 +109,9 @@ the browser and desktop tests protect the library workflow during the work.
 | Data | Now | Target |
 | --- | --- | --- |
 | Chat history (`chat-<id>`) | Renderer local storage | Library (with chat) |
-| Inbox (`ingest-queue`) | Renderer local storage | Library: inbox sources without a project |
+| Inbox (`ingest-queue`) | Library: sources without a project (done) | — |
 | Topics list, favicon cache | Renderer local storage | Library, or derive again |
-| Settings | Electron file (desktop), local storage (browser) | Library settings for user data; platform settings stay local |
+| Settings | Electron file (desktop), storage service (browser) | Library settings for user data on both clients; platform settings stay local |
 | UI preferences (table, theme) | Renderer local storage | Can stay local |
 
 After this, one library backup can hold all user data.
