@@ -34,12 +34,13 @@ export interface ProjectRecord {
 
 export interface SourceRecord {
   id: string;
-  projectId: string;
+  /** null: the source is in the inbox, not in a project yet. */
+  projectId: string | null;
   title: string;
   ingestType: string;
   /** Managed file of a file source. */
   assetId: string | null;
-  /** Order inside the project. Set by the service. */
+  /** Order inside the project or the inbox. Set by the service. */
   position?: number;
   /** Every source field that has no column. */
   data: JsonObject;
@@ -71,6 +72,7 @@ export type StorageErrorCode =
   | "forbidden"
   | "not_found"
   | "conflict"
+  | "precondition_failed"
   | "payload_too_large"
   | "internal";
 
@@ -90,18 +92,46 @@ export interface SourceList {
 export const ASSET_FILENAME_HEADER = "x-knowledge-filename";
 export const ASSET_ORIGINAL_PATH_HEADER = "x-knowledge-original-path";
 
+/** Library counts. `sources` includes the inbox entries. */
+export interface LibraryCounts {
+  projects: number;
+  sources: number;
+  inbox: number;
+  assets: number;
+}
+
 /** GET /v1/library */
 export interface LibraryStatus {
   empty: boolean;
-  counts: { projects: number; sources: number; assets: number };
+  counts: LibraryCounts;
 }
+
+/**
+ * Request header for PUT /v1/sources/<id>. With the value "*", the service
+ * creates the source only if no source has this ID. Otherwise it returns
+ * 412 and changes nothing.
+ */
+export const CREATE_ONLY_HEADER = "if-none-match";
+
+/** GET and PUT /v1/preferences/<key>. Not part of a library backup. */
+export interface PreferenceDocument {
+  key: string;
+  data: JsonObject;
+  updatedAt: string;
+}
+
+/**
+ * Response header on requests that use a browser session: seconds until
+ * the session ends if no other request arrives.
+ */
+export const SESSION_TTL_HEADER = "x-knowledge-session-ttl";
 
 /** Result of POST /v1/restores: a validated backup that is not active yet. */
 export interface RestorePreview {
   id: string;
   backupCreatedAt: string | null;
   backupVersion: number;
-  counts: { projects: number; sources: number; assets: number; bytes: number };
+  counts: LibraryCounts & { bytes: number };
   /** First 50 project names. */
   projectNames: string[];
   warnings: string[];
@@ -109,9 +139,13 @@ export interface RestorePreview {
   notIncluded: string[];
 }
 
+/**
+ * Version 1: projects, sources, and managed files.
+ * Version 2: also inbox entries (sources with projectId null).
+ */
 export interface LibraryBackupManifest {
   format: "knowledge-library-backup";
-  version: 1;
+  version: 1 | 2;
   createdAt: string;
   service: { version: string; schemaVersion: number };
   projects: ProjectRecord[];

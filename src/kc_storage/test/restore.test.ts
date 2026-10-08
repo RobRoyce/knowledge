@@ -119,15 +119,15 @@ test("restore through the API: validate, preview, activate, refuse a second time
   // An initialized but empty library is accepted
   assert.deepEqual((await api.get("/v1/library")).body, {
     empty: true,
-    counts: { projects: 0, sources: 0, assets: 0 },
+    counts: { projects: 0, sources: 0, inbox: 0, assets: 0 },
   });
 
   const up = await upload(svc, tar);
   assert.equal(up.status, 201, JSON.stringify(up.body));
   const preview = up.body.restore;
-  assert.deepEqual(preview.counts, { projects: 2, sources: 3, assets: 2, bytes: assets.pdf.size + assets.txt.size });
+  assert.deepEqual(preview.counts, { projects: 2, sources: 3, inbox: 0, assets: 2, bytes: assets.pdf.size + assets.txt.size });
   assert.deepEqual(preview.projectNames.sort(), ["Child", "Restore Project"]);
-  assert.equal(preview.backupVersion, 1);
+  assert.equal(preview.backupVersion, 2);
   assert.ok(preview.notIncluded.includes("Chat history"));
   assert.ok(preview.notIncluded.includes("API keys"));
 
@@ -136,7 +136,7 @@ test("restore through the API: validate, preview, activate, refuse a second time
 
   const done = await activate(svc, preview.id);
   assert.equal(done.status, 200);
-  assert.deepEqual(done.body.restored, { projects: 2, sources: 3, assets: 2 });
+  assert.deepEqual(done.body.restored, { projects: 2, sources: 3, inbox: 0, assets: 2 });
   assert.deepEqual(
     (await api.get("/v1/projects")).body.projects.map(({ updatedAt, ...r }: any) => r),
     expected.projects
@@ -196,8 +196,8 @@ test("invalid backups are rejected before activation and leave nothing behind", 
   const cases: [string, Promise<string>, RegExp][] = [
     [
       "unsupported version",
-      modified(tar, out("v2.tar"), (m) => (m.version = 2)),
-      /Backup version 2 is not supported/,
+      modified(tar, out("v3.tar"), (m) => (m.version = 3)),
+      /Backup version 3 is not supported/,
     ],
     [
       "missing asset file",
@@ -254,9 +254,9 @@ test("invalid backups are rejected before activation and leave nothing behind", 
   assert.ok(!fs.existsSync("/tmp/kc-escaped.txt"));
 
   // The command line uses the same validation
-  const viaCli = cli(["restore", "--data-dir", tempDir("rs-cli"), "--from", out("v2.tar")]);
+  const viaCli = cli(["restore", "--data-dir", tempDir("rs-cli"), "--from", out("v3.tar")]);
   assert.equal(viaCli.status, 1);
-  assert.match(viaCli.stderr, /Backup version 2 is not supported/);
+  assert.match(viaCli.stderr, /Backup version 3 is not supported/);
 });
 
 test("a failure during activation rolls back records and files", async () => {

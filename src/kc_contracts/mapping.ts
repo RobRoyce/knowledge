@@ -33,7 +33,8 @@ export interface MappedProject {
 
 export interface MappedSource {
   id: string;
-  projectId: string;
+  /** null: inbox */
+  projectId: string | null;
   title: string;
   ingestType: string;
   assetId: string | null;
@@ -72,7 +73,10 @@ export function projectToRecord(project: Json): MappedProject {
   };
 }
 
-export function sourceToRecord(source: Json, projectId: string): MappedSource {
+export function sourceToRecord(
+  source: Json,
+  projectId: string | null
+): MappedSource {
   return {
     id: source["id"]?.value,
     projectId,
@@ -100,7 +104,8 @@ export function recordToSource(source: MappedSource): Json {
     id: { value: source.id },
     title: source.title,
     ingestType: source.ingestType,
-    associatedProject: { value: source.projectId },
+    // The UI uses an empty ID for a source without a project (inbox)
+    associatedProject: { value: source.projectId ?? "" },
   };
   if (source.assetId) {
     out["assetId"] = source.assetId;

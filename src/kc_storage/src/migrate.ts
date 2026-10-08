@@ -67,6 +67,8 @@ export interface MigrationReport {
   superseded: { key: string; differentFields: string[] }[];
   /** Derived source fields that were not stored, by field name. */
   droppedDerivedFields: Record<string, number>;
+  /** IDs of inbox entries (ingest-queue) planned as sources without a project. */
+  inbox: string[];
   /** Renderer keys that stay in localStorage (chat history, preferences). */
   rendererKeys: string[];
   rollback: { snapshot: string | null };
@@ -138,6 +140,7 @@ export async function migrate(
     files: { copied: [], reused: [], kept: [], missing: [] },
     superseded: [],
     droppedDerivedFields: {},
+    inbox: [],
     rendererKeys: [],
     rollback: { snapshot: null },
   };
@@ -204,7 +207,7 @@ export async function migrate(
   }
   consumed.add("kc-projects");
 
-  function planSource(ks: any, projectId: string) {
+  function planSource(ks: any, projectId: string | null) {
     const id = ks?.id?.value ?? "(no id)";
     try {
       for (const field of DERIVED_SOURCE_FIELDS) {
@@ -215,6 +218,10 @@ export async function migrate(
       }
       const mapped = sourceToRecord(ks, projectId);
       const record = validSource(mapped.id, mapped);
+      // A managed file that this library does not have: copy it by path again
+      if (record.assetId && !dir.library.getAsset(record.assetId)) {
+        record.assetId = null;
+      }
       if (plannedIds.has(record.id)) {
         report.sources.skipped.push({
           id,
@@ -264,6 +271,43 @@ export async function migrate(
         title: ks?.title,
         reason: `Separate record ${key} has no project in the input.`,
       });
+    }
+  }
+
+  // Inbox entries. Import an entry only if no source has its ID, so a
+  // repeated run or an entry already moved to a project stays unchanged.
+  const inboxRaw = data["ingest-queue"];
+  if (inboxRaw !== undefined) {
+    consumed.add("ingest-queue");
+    let queue: unknown;
+    try {
+      queue = JSON.parse(inboxRaw);
+    } catch {
+      queue = undefined;
+    }
+    if (!Array.isArray(queue)) {
+      report.sources.failed.push({
+        id: "ingest-queue",
+        reason: "The inbox is not a JSON list.",
+      });
+    } else {
+      for (const ks of queue) {
+        const id = ks?.id?.value;
+        if (
+          typeof id === "string" &&
+          (plannedIds.has(id) || dir.library.getSource(id))
+        ) {
+          report.sources.skipped.push({
+            id,
+            title: ks?.title,
+            reason: "The inbox entry is already in the library.",
+          });
+          continue;
+        }
+        const before = planned.length;
+        planSource(ks, null);
+        if (planned.length > before) report.inbox.push(id);
+      }
     }
   }
 

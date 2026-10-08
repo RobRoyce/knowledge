@@ -5,6 +5,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import type {
   AssetRecord,
+  JsonObject,
+  LibraryCounts,
+  PreferenceDocument,
   ProjectRecord,
   SourceRecord,
 } from "../../kc_contracts/storage.ts";
@@ -24,7 +27,7 @@ interface ProjectRow {
 
 interface SourceRow {
   id: string;
-  project_id: string;
+  project_id: string | null;
   title: string;
   ingest_type: string;
   asset_id: string | null;
@@ -130,16 +133,20 @@ export class Library {
     );
   }
 
-  listSources(projectId?: string): SourceRecord[] {
-    const rows = (projectId
+  /**
+   * All sources (inbox first), the sources of one project, or with
+   * projectId null, the inbox. Each group is in position order.
+   */
+  listSources(projectId?: string | null): SourceRecord[] {
+    const rows = (projectId === undefined
       ? this.db
-          .prepare(
-            "SELECT * FROM sources WHERE project_id = ? ORDER BY position, id"
-          )
-          .all(projectId)
-      : this.db
           .prepare("SELECT * FROM sources ORDER BY project_id, position, id")
-          .all()) as unknown as SourceRow[];
+          .all()
+      : this.db
+          .prepare(
+            "SELECT * FROM sources WHERE project_id IS ? ORDER BY position, id"
+          )
+          .all(projectId)) as unknown as SourceRow[];
     return rows.map(toSource);
   }
 
@@ -148,8 +155,9 @@ export class Library {
     return row ? toSource(row as unknown as SourceRow) : undefined;
   }
 
+  /** A source with projectId null is an inbox entry. */
   putSource(s: SourceRecord, createdAt?: string): WriteResult {
-    if (!this.getProject(s.projectId)) {
+    if (s.projectId !== null && !this.getProject(s.projectId)) {
       throw conflict(`Project ${s.projectId} does not exist.`);
     }
     if (s.assetId && !this.getAsset(s.assetId)) {
@@ -161,7 +169,7 @@ export class Library {
       .prepare("SELECT * FROM sources WHERE id = ?")
       .get(s.id) as unknown as SourceRow | undefined;
 
-    // New sources and moved sources go to the end of their project
+    // New and moved sources go to the end of their project or the inbox
     const position =
       old && old.project_id === s.projectId
         ? old.position
@@ -220,9 +228,9 @@ export class Library {
     );
   }
 
-  private nextPosition(projectId: string): number {
+  private nextPosition(projectId: string | null): number {
     const row = this.db
-      .prepare("SELECT MAX(position) AS p FROM sources WHERE project_id = ?")
+      .prepare("SELECT MAX(position) AS p FROM sources WHERE project_id IS ?")
       .get(projectId) as { p: number | null };
     return (row.p ?? -1) + 1;
   }
@@ -280,14 +288,36 @@ export class Library {
     return new Set(rows.map((r) => r.id));
   }
 
-  counts(): { projects: number; sources: number; assets: number } {
+  counts(): LibraryCounts {
     return this.db
       .prepare(
         `SELECT (SELECT COUNT(*) FROM projects) AS projects,
                 (SELECT COUNT(*) FROM sources) AS sources,
+                (SELECT COUNT(*) FROM sources WHERE project_id IS NULL) AS inbox,
                 (SELECT COUNT(*) FROM assets) AS assets`
       )
-      .get() as { projects: number; sources: number; assets: number };
+      .get() as unknown as LibraryCounts;
+  }
+
+  getPreference(key: string): PreferenceDocument | undefined {
+    const row = this.db
+      .prepare("SELECT * FROM preferences WHERE key = ?")
+      .get(key) as
+      | { key: string; data: string; updated_at: string }
+      | undefined;
+    return row
+      ? { key: row.key, data: JSON.parse(row.data), updatedAt: row.updated_at }
+      : undefined;
+  }
+
+  putPreference(key: string, data: JsonObject): PreferenceDocument {
+    this.db
+      .prepare(
+        `INSERT INTO preferences (key, data, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
+      )
+      .run(key, JSON.stringify(data), now());
+    return this.getPreference(key)!;
   }
 
   isEmpty(): boolean {
