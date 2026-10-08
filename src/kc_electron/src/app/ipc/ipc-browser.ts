@@ -19,13 +19,13 @@ import {
   IpcMessage,
 } from "../../../../kc_shared/models/electron.ipc.model";
 import {
-  BrowserView,
   BrowserWindow,
   dialog,
   ipcMain,
   Menu,
   MenuItem,
   shell,
+  WebContentsView,
 } from "electron";
 import path from "path";
 import fs from "fs";
@@ -47,8 +47,12 @@ const browserViewEventListeners = [
   "A2E:BrowserView:CurrentUrl",
   "A2E:BrowserView:GoBack",
   "A2E:BrowserView:GoForward",
+  "A2E:BrowserView:Invert",
   "A2E:BrowserView:Refresh",
 ];
+
+/** The embedded browser view, if one is open. One at a time. */
+let currentView: { view: WebContentsView; onResize: () => void } | undefined;
 
 /**
  *
@@ -155,9 +159,6 @@ extractWebsite = ipcMain.on(
                 width: 12,
                 height: 32,
               },
-              margins: {
-                marginType: "printableArea",
-              },
 
               printBackground: true,
               preferCSSPageSize: false,
@@ -223,10 +224,15 @@ extractWebsite = ipcMain.on(
  */
 
 destroyBrowserViews = (kcMainWindow: any) => {
-  const allViews = kcMainWindow.getBrowserViews();
-  kcMainWindow.setBrowserView(null);
-  for (const view of allViews) {
-    view.webContents.destroy();
+  if (!currentView) {
+    return;
+  }
+  const { view, onResize } = currentView;
+  currentView = undefined;
+  kcMainWindow.off("resize", onResize);
+  kcMainWindow.contentView.removeChildView(view);
+  if (!view.webContents.isDestroyed()) {
+    view.webContents.close();
   }
 };
 
@@ -303,16 +309,30 @@ openBrowserView = ipcMain.on(
       y = args.y,
       width = args.width,
       height = args.height;
-    const kcBrowserView = new BrowserView();
+    // One view at a time. Opening a new view replaces the old one.
+    destroyBrowserViews(kcMainWindow);
+    for (const bvEventListener of browserViewEventListeners) {
+      ipcMain.removeAllListeners(bvEventListener);
+    }
 
-    kcMainWindow.setBrowserView(kcBrowserView);
+    const kcBrowserView = new WebContentsView();
+    kcMainWindow.contentView.addChildView(kcBrowserView);
     kcBrowserView.setBounds({ x: x, y: y, width: width, height: height });
-    kcBrowserView.setAutoResize({
-      width: true,
-      height: true,
-      horizontal: true,
-      vertical: true,
-    });
+
+    // The view grows and shrinks with the window, like the old BrowserView auto-resize
+    const [startWidth, startHeight] = kcMainWindow.getContentSize();
+    const onResize = () => {
+      const [w, h] = kcMainWindow.getContentSize();
+      kcBrowserView.setBounds({
+        x,
+        y,
+        width: Math.max(0, width + w - startWidth),
+        height: Math.max(0, height + h - startHeight),
+      });
+    };
+    kcMainWindow.on("resize", onResize);
+    currentView = { view: kcBrowserView, onResize };
+
     kcBrowserView.webContents.loadURL(viewUrl.href);
 
     /**
@@ -440,7 +460,7 @@ openBrowserView = ipcMain.on(
       e.preventDefault();
       console.log("Context menu event: ", e.session);
       selectedText = params.selectionText;
-      menu.popup(kcBrowserView as any);
+      menu.popup({ window: kcMainWindow });
     });
 
     /**
@@ -448,25 +468,29 @@ openBrowserView = ipcMain.on(
      * These MUST be removed when the browser view is closed (see above function for browser-view-close)
      */
     ipcMain.on("A2E:BrowserView:CanGoBack", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       const response: IpcMessage = {
         error: undefined,
-        success: { data: kcBrowserView.webContents.canGoBack() },
+        success: {
+          data: kcBrowserView.webContents.navigationHistory.canGoBack(),
+        },
       };
       kcMainWindow.webContents.send("E2A:BrowserView:CanGoBack", response);
     });
 
     ipcMain.on("A2E:BrowserView:CanGoForward", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       const response: IpcMessage = {
         error: undefined,
-        success: { data: kcBrowserView.webContents.canGoForward() },
+        success: {
+          data: kcBrowserView.webContents.navigationHistory.canGoForward(),
+        },
       };
       kcMainWindow.webContents.send("E2A:BrowserView:CanGoForward", response);
     });
 
     ipcMain.on("A2E:BrowserView:CurrentUrl", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       const response: IpcMessage = {
         error: undefined,
         success: { data: kcBrowserView.webContents.getURL() },
@@ -475,22 +499,22 @@ openBrowserView = ipcMain.on(
     });
 
     ipcMain.on("A2E:BrowserView:GoBack", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       if (kcBrowserView.webContents) {
-        kcBrowserView.webContents.goBack();
+        kcBrowserView.webContents.navigationHistory.goBack();
       }
     });
 
     ipcMain.on("A2E:BrowserView:GoForward", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       if (kcBrowserView.webContents) {
-        kcBrowserView.webContents.goForward();
+        kcBrowserView.webContents.navigationHistory.goForward();
       }
     });
 
     ipcMain.on("A2E:BrowserView:Invert", () => {
       // Add CSS to the BrowserView to invert the colors
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       if (kcBrowserView.webContents) {
         // This should eventually be made more robust (e.g. do not invert images)
         const css = inverted
@@ -502,7 +526,7 @@ openBrowserView = ipcMain.on(
     });
 
     ipcMain.on("A2E:BrowserView:Refresh", () => {
-      if (!kcBrowserView.webContents) return;
+      if (kcBrowserView.webContents.isDestroyed()) return;
       if (kcBrowserView.webContents) {
         kcBrowserView.webContents.reload();
       }

@@ -28,10 +28,6 @@ let webpack_config = {
         test: /\.ts$/, // This particular rule matches all .ts files
         use: [{ loader: "ts-loader" }], // Which loader to use when the rule matches
       },
-      {
-        test: /\.node$/,
-        loader: "node-loader",
-      },
     ],
   },
   output: {

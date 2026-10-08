@@ -21,7 +21,6 @@ import { autoUpdater, UpdateCheckResult } from "electron-updater";
 
 import {
   app,
-  BrowserView,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -56,7 +55,6 @@ const MAIN_ENTRY: string = path.join(
 );
 
 (global as any).share = {
-  BrowserView,
   BrowserWindow,
   app,
   autoUpdater,
