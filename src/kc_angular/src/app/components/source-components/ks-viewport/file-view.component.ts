@@ -77,7 +77,11 @@ export class FileViewComponent implements OnInit, OnChanges {
 
   ngOnChanges(changes: SimpleChanges) {
     const config: FileViewConfig = changes.config.currentValue;
-    if (config) {
+    if (config?.url) {
+      this.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(config.url);
+      this.ready = true;
+      this.viewReady.emit(true);
+    } else if (config) {
       if (config.filePath) {
         if (this.validateFileURI(config.filePath)) {
           this.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(

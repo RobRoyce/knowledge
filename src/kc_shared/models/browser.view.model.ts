@@ -45,6 +45,8 @@ export interface BrowserViewHeaderEvent {
 
 export interface FileViewConfig {
   filePath: string;
+  /** URL of the library copy. When set, the view shows it, not filePath. */
+  url?: string;
   isDialog?: true;
 }
 

@@ -24,6 +24,7 @@ export function isDesktop(): boolean {
 export type Feature =
   | 'chat'
   | 'saveWebsite'
+  | 'savePdf'
   | 'embeddedBrowser'
   | 'importSettings'
   | 'windowControls'
@@ -31,11 +32,13 @@ export type Feature =
   | 'showInFolder'
   | 'fileThumbnails'
   | 'fileIcons'
+  | 'websiteIcons'
   | 'dragOut';
 
 const DESKTOP_ONLY: Record<Feature, string> = {
   chat: 'Chat is available in the desktop app.',
   saveWebsite: 'Saving websites is available in the desktop app.',
+  savePdf: 'Saving a website as PDF is available in the desktop app.',
   embeddedBrowser: 'The built-in browser is available in the desktop app.',
   importSettings:
     'Watched folders and extension settings are available in the desktop app.',
@@ -45,6 +48,8 @@ const DESKTOP_ONLY: Record<Feature, string> = {
   showInFolder: 'Showing files in Finder is available in the desktop app.',
   fileThumbnails: 'File thumbnails are available in the desktop app.',
   fileIcons: 'File icons are available in the desktop app.',
+  websiteIcons:
+    'Website icons come from an external service. The browser client does not contact it.',
   dragOut: 'Dragging files out of Knowledge is available in the desktop app.',
 };
 

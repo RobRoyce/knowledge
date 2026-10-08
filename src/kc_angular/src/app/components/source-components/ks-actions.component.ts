@@ -13,6 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { Platform } from '@app/platform/platform';
+import { WebsitePdf } from '@app/platform/website-pdf';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { ExtractorService } from '@services/ingest-services/extractor.service';
@@ -50,22 +52,28 @@ import { ExtractorService } from '@services/ingest-services/extractor.service';
       ></button>
       <button
         pButton
-        *ngIf="showChat"
+        *ngIf="showChat && platform.has('chat')"
         class="m-1 p-button-text"
         icon="pi pi-comments"
         pTooltip="Chat"
         [tooltipOptions]="actionButtonTooltipOptions"
         (click)="chat.emit()"
       ></button>
-      <button
+      <span
         *ngIf="showSavePdf && ks.ingestType !== 'file'"
-        pButton
-        class="m-1 p-button-text"
-        icon="pi pi-file-pdf"
-        pTooltip="Save as PDF"
+        [pTooltip]="pdf.available ? 'Save as PDF' : unavailablePdf"
         [tooltipOptions]="actionButtonTooltipOptions"
-        (click)="saveAsPdf()"
-      ></button>
+      >
+        <button
+          pButton
+          class="m-1 p-button-text"
+          icon="pi pi-file-pdf"
+          data-test="save-pdf"
+          [attr.aria-label]="pdf.available ? 'Save as PDF' : unavailablePdf"
+          [disabled]="!pdf.available"
+          (click)="saveAsPdf()"
+        ></button>
+      </span>
       <button
         pButton
         *ngIf="showRemove"
@@ -119,7 +127,14 @@ export class KsActionsComponent {
 
   @Output() flag = new EventEmitter<any>();
 
-  constructor(private extractor: ExtractorService) {}
+  readonly unavailablePdf =
+    'Save as PDF is available in the desktop app. It renders the website in a hidden desktop window.';
+
+  constructor(
+    private extractor: ExtractorService,
+    public pdf: WebsitePdf,
+    public platform: Platform
+  ) {}
 
   saveAsPdf() {
     this.extractor.websiteToPdf(

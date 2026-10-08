@@ -24,6 +24,11 @@ import {
 } from '@services/ipc-services/backend.service';
 import { isDesktop } from '@app/platform/platform';
 import {
+  BrowserWebsitePdf,
+  DesktopWebsitePdf,
+  WebsitePdf,
+} from '@app/platform/website-pdf';
+import {
   BrowserSettingsStore,
   DesktopSettingsStore,
   SettingsStore,
@@ -376,6 +381,10 @@ import { CarouselModule } from 'primeng/carousel';
     {
       provide: BackendService,
       useClass: DESKTOP ? DesktopBackendService : BrowserBackendService,
+    },
+    {
+      provide: WebsitePdf,
+      useClass: DESKTOP ? DesktopWebsitePdf : BrowserWebsitePdf,
     },
     {
       provide: SettingsStore,
