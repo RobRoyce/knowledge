@@ -241,7 +241,8 @@ export class ProjectService {
    * e.g. create an update with ID (required) and an array removeKnowledgeSource[], etc.
    * @param updates An array of ProjectUpdateRequest objects
    */
-  async updateProjects(updates: ProjectUpdateRequest[]) {
+  async updateProjects(updates: ProjectUpdateRequest[]): Promise<boolean> {
+    let saved = true;
     for (const update of updates) {
       // Make sure the target project exists
       let target = this.projectSource.find(
@@ -252,7 +253,7 @@ export class ProjectService {
           `Attempting to update non-existant project with ID:`,
           update.id.value
         );
-        return;
+        return false;
       }
 
       // Description accumulator, used by each operation to describe what actions occured in a meaningful way.
@@ -382,7 +383,22 @@ export class ProjectService {
       }
 
       // Persist project to storage system
-      await this.storageService.updateProject(target);
+      if (!(await this.storageService.updateProject(target))) {
+        saved = false;
+        // Show only the added sources that the service has in this project
+        const added = new Set(
+          (update.addKnowledgeSource ?? [])
+            .filter(
+              (ks) =>
+                this.storageService.savedProjectOf(ks.id.value) !==
+                target!.id.value
+            )
+            .map((ks) => ks.id.value)
+        );
+        target.knowledgeSource = target.knowledgeSource.filter(
+          (ks) => !added.has(ks.id.value)
+        );
+      }
 
       this.projectSource = this.projectSource.filter(
         (p) => p.id.value !== update.id.value
@@ -391,6 +407,7 @@ export class ProjectService {
     }
 
     this.refreshTree();
+    return saved;
   }
 
   setCurrentProject(id: string | null): void {

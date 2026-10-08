@@ -265,19 +265,11 @@ export class CategorizeMessage implements OnInit {
         ]);
       } else {
         // Otherwise it must be in the inbox
-        this.service
-          .updateProjects([
-            {
-              id: { value: project.id },
-              addKnowledgeSource: [source],
-            },
-          ])
-          .then(() => {
-            setTimeout(() => {
-              this.ingest.add(source);
-              this.service.setCurrentProject(project.id);
-            }, 500);
-          });
+        this.ingest.transfer([source], project.id).then((saved) => {
+          if (saved) {
+            setTimeout(() => this.service.setCurrentProject(project.id), 500);
+          }
+        });
       }
     });
   }

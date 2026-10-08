@@ -59,16 +59,22 @@ export class DataService implements OnDestroy {
       return (await this.storage.ksList()).filter((ks) => ids.has(ks.id.value));
     },
 
-    /** Sources live inside their project. The storage service persists both. */
-    update: async (ksList: KnowledgeSource[]) => {
+    /**
+     * Sources live inside their project. The storage service persists both.
+     * Resolves true when every source is saved.
+     */
+    update: async (ksList: KnowledgeSource[]): Promise<boolean> => {
+      let saved = true;
       for (const ks of ksList) {
-        await this._projects.updateProjects([
+        const ok = await this._projects.updateProjects([
           {
             id: ks.associatedProject,
             updateKnowledgeSource: [ks],
           },
         ]);
+        saved = saved && ok;
       }
+      return saved;
     },
 
     count: this.__ksList.asObservable().pipe(map((sources) => sources.length)),

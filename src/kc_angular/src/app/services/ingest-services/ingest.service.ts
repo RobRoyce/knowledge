@@ -30,6 +30,7 @@ import { KsFactoryService } from '../factory-services/ks-factory.service';
 import { NotificationsService } from '../user-services/notifications.service';
 import { ProjectService } from '../factory-services/project.service';
 import { SettingsService } from '../ipc-services/settings.service';
+import { StorageService } from '../ipc-services/storage.service';
 
 @Injectable({
   providedIn: 'root',
@@ -49,18 +50,13 @@ export class IngestService implements OnDestroy {
     private ipc: ElectronIpcService,
     private projects: ProjectService,
     private sanitizer: DomSanitizer,
-    private notify: NotificationsService
+    private notify: NotificationsService,
+    private storage: StorageService
   ) {
     this.autoscanSubscribe();
     this.extensionSubscribe();
 
     this.loadInbox();
-
-    this.queue.subscribe((sources) => {
-      // Persist source list every time it is update. Restore it on app load.
-      const sourceString = JSON.stringify(sources);
-      localStorage.setItem('ingest-queue', sourceString);
-    });
   }
 
   ngOnDestroy() {
@@ -69,7 +65,41 @@ export class IngestService implements OnDestroy {
     }
   }
 
+  /** Add new sources to the inbox and save them on the service. */
   enqueue(ksList: KnowledgeSource[]) {
+    const added = this.addToList(ksList);
+    if (added.length <= 0) {
+      return;
+    }
+    this.storage.saveInboxEntries(added);
+    this.notify.success(
+      'IngestService',
+      'Source Imported',
+      `Imported ${added.length} Source${added.length > 1 ? 's' : ''}.`
+    );
+  }
+
+  /**
+   * Move inbox entries to a project. The project write moves each entry on
+   * the service in one step. An entry leaves the inbox list only after that
+   * write is saved. Repeating a transfer cannot copy a source, because the
+   * source keeps its ID.
+   */
+  async transfer(sources: KnowledgeSource[], projectId: string) {
+    const saved = await this.projects.updateProjects([
+      { id: { value: projectId }, addKnowledgeSource: sources },
+    ]);
+    const moved = sources.filter(
+      (ks) => this.storage.savedProjectOf(ks.id.value) === projectId
+    );
+    for (const ks of moved) {
+      this.add(ks);
+    }
+    return saved && moved.length === sources.length;
+  }
+
+  /** Show sources in the inbox list. Returns the sources that were new. */
+  private addToList(ksList: KnowledgeSource[]): KnowledgeSource[] {
     let ksQueue = this._queue.value;
     const ksNext: KnowledgeSource[] = [];
 
@@ -95,7 +125,7 @@ export class IngestService implements OnDestroy {
     }
 
     if (ksNext.length <= 0) {
-      return;
+      return [];
     }
 
     ksQueue = ksQueue.concat(ksNext);
@@ -116,16 +146,7 @@ export class IngestService implements OnDestroy {
     });
 
     this._queue.next(ksQueue);
-
-    if (ksList.length <= 0) {
-      return;
-    }
-
-    this.notify.success(
-      'IngestService',
-      'Source Imported',
-      `Imported ${ksNext.length} Source${ksNext.length > 1 ? 's' : ''}.`
-    );
+    return ksNext;
   }
 
   add(ks: KnowledgeSource) {
@@ -137,6 +158,7 @@ export class IngestService implements OnDestroy {
 
   remove(ks: KnowledgeSource) {
     this.finalize(ks, 'remove');
+    this.storage.deleteInboxEntry(ks);
     this._queue.next(
       this._queue.value.filter((k) => k.id.value !== ks.id.value)
     );
@@ -153,19 +175,19 @@ export class IngestService implements OnDestroy {
     this.settings.show('import');
   }
 
-  private loadInbox() {
-    const inbox = localStorage.getItem('ingest-queue');
-    if (inbox) {
-      const sources = JSON.parse(inbox);
-
-      for (const source of sources) {
-        source.icon = undefined;
-      }
-
-      this.favicon.extractFromKsList(sources).then((updated) => {
-        this.enqueue(updated);
-      });
+  /** Show the inbox from the service, then move an older local inbox. */
+  private async loadInbox() {
+    const sources = [...this.storage.inbox];
+    sources.push(...(await this.storage.migrateLocalInbox()));
+    if (sources.length === 0) {
+      return;
     }
+    for (const source of sources) {
+      source.icon = undefined;
+    }
+    // Keep the saved order. Show every saved entry, also ones with equal titles.
+    const shown = await this.favicon.extractFromKsList(sources);
+    this._queue.next([...this._queue.value, ...shown]);
   }
 
   /**

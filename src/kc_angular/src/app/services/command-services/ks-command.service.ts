@@ -57,15 +57,17 @@ export class KsCommandService {
     private platform: Platform
   ) {}
 
-  update(ksList: KnowledgeSource[], notify = true) {
-    this.data.sources.update(ksList).then(() => {
-      if (notify) {
+  /** Resolves true when the service saved every source. */
+  update(ksList: KnowledgeSource[], notify = true): Promise<boolean> {
+    return this.data.sources.update(ksList).then((saved) => {
+      if (saved && notify) {
         this.notifications.success(
           'Source Command',
           `Source${ksList.length > 1 ? 's' : ''} Updated`,
           ksList.map((k) => k.title).join(', ')
         );
       }
+      return saved;
     });
   }
 

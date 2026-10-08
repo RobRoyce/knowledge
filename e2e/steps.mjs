@@ -59,6 +59,15 @@ export async function importFilesToProject(page, files) {
   await page.locator("button", { hasText: "Import" }).first().click();
 }
 
+/** Show the Inbox (keyboard shortcut Cmd+1 / Ctrl+1). */
+export async function openInbox(page) {
+  await page.locator("body").click({ position: { x: 5, y: 600 } });
+  await page.keyboard.press(
+    process.platform === "darwin" ? "Meta+1" : "Control+1"
+  );
+  await page.locator("app-home").first().waitFor({ timeout: TIMEOUT });
+}
+
 /** Select a project in the project tree. */
 export async function selectProject(page, name) {
   await page
@@ -125,8 +134,9 @@ export async function addTopic(page, topic) {
   await input.press("Enter");
 }
 
+/** The Document tab of the open source dialog. */
 export async function openDocumentTab(page) {
-  await page.getByText("Document", { exact: true }).click();
+  await page.getByRole("dialog").getByText("Document", { exact: true }).click();
 }
 
 /** Type into the global search box and return the suggestion texts. */

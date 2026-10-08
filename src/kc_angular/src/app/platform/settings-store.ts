@@ -14,7 +14,11 @@
  *  limitations under the License.
  */
 
-import { Observable, ReplaySubject } from 'rxjs';
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom, Observable, ReplaySubject } from 'rxjs';
+import type { PreferenceDocument } from '@contracts/storage';
+import { BackendService } from '@services/ipc-services/backend.service';
 import {
   createDefaultSettings,
   SettingsModel,
@@ -31,11 +35,20 @@ export abstract class SettingsStore {
   /** Request the current settings. */
   abstract start(): void;
 
+  /**
+   * Resolves when the saved settings are loaded. The app waits for it at
+   * startup, so no page reads or saves defaults in place of saved values.
+   */
+  ready(): Promise<void> {
+    return Promise.resolve();
+  }
+
   /** Merge a partial settings object and store it. */
   abstract save(partial: object): void;
 }
 
 /** Desktop: Electron keeps settings in knowledge.settings.json. */
+@Injectable()
 export class DesktopSettingsStore extends SettingsStore {
   private subject = new ReplaySubject<SettingsModel>(1);
   readonly changes = this.subject.asObservable();
@@ -63,7 +76,11 @@ export class DesktopSettingsStore extends SettingsStore {
   }
 }
 
-const BROWSER_SETTINGS_KEY = 'kc-settings';
+/** Settings of earlier versions, in localStorage of one browser address. */
+const LEGACY_SETTINGS_KEY = 'kc-settings';
+
+/** Preference document of the browser client in the storage service. */
+const BROWSER_SETTINGS_PREFERENCE = 'browser-settings';
 
 function browserDefaults(): SettingsModel {
   return createDefaultSettings({
@@ -110,26 +127,41 @@ function merge(target: any, source: any): any {
   return out;
 }
 
-/** Browser: settings are UI preferences in localStorage. */
+/**
+ * Browser: the storage service keeps the settings with the library, so
+ * they do not depend on the browser address. Nothing is emitted before the
+ * saved settings load, so an early save cannot replace them with defaults.
+ */
+@Injectable()
 export class BrowserSettingsStore extends SettingsStore {
   private subject = new ReplaySubject<SettingsModel>(1);
   readonly changes = this.subject.asObservable();
   private current: SettingsModel = browserDefaults();
+  private loaded = false;
+  private loading?: Promise<void>;
+  private early: object[] = [];
+  private writing = false;
+  private dirty = false;
+
+  constructor(private http: HttpClient, private backend: BackendService) {
+    super();
+  }
+
+  private get url() {
+    return `${this.backend.storage.url}/v1/preferences/${BROWSER_SETTINGS_PREFERENCE}`;
+  }
 
   defaults() {
     return Promise.resolve(browserDefaults());
   }
 
   start() {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem(BROWSER_SETTINGS_KEY) ?? '{}'
-      );
-      this.current = merge(browserDefaults(), saved);
-    } catch {
-      this.current = browserDefaults();
-    }
-    this.subject.next(this.current);
+    this.ready();
+  }
+
+  override ready() {
+    this.loading ??= this.load();
+    return this.loading;
   }
 
   /**
@@ -137,17 +169,80 @@ export class BrowserSettingsStore extends SettingsStore {
    * Subscribers that save settings in response cannot start a loop.
    */
   save(partial: object) {
+    if (!this.loaded) {
+      this.early.push(partial);
+      return;
+    }
     const next = merge(this.current, partial);
-    const json = JSON.stringify(next);
-    if (json === JSON.stringify(this.current)) {
+    if (JSON.stringify(next) === JSON.stringify(this.current)) {
       return;
     }
     this.current = next;
-    try {
-      localStorage.setItem(BROWSER_SETTINGS_KEY, json);
-    } catch (e) {
-      console.warn('[Settings]: not saved', e);
-    }
+    this.write();
     setTimeout(() => this.subject.next(this.current));
+  }
+
+  private async load() {
+    await this.backend.whenActive();
+    let saved: object = {};
+    let migrate = false;
+    try {
+      const { preference } = await firstValueFrom(
+        this.http.get<{ preference: PreferenceDocument }>(this.url)
+      );
+      saved = preference.data;
+    } catch (e) {
+      if (e instanceof HttpErrorResponse && e.status === 404) {
+        // First start of this library: save the settings document once,
+        // with the settings of an earlier version at this address, if any
+        saved = legacySettings();
+        migrate = true;
+      } else {
+        console.warn('[Settings]: not loaded', e);
+      }
+    }
+    this.current = merge(browserDefaults(), saved);
+    for (const partial of this.early) {
+      this.current = merge(this.current, partial);
+    }
+    this.loaded = true;
+    if (migrate || this.early.length > 0) this.write();
+    this.early = [];
+    this.subject.next(this.current);
+  }
+
+  /** Write the newest settings. Waits while the connection is not active. */
+  private async write() {
+    this.dirty = true;
+    if (this.writing) return;
+    this.writing = true;
+    try {
+      while (this.dirty) {
+        this.dirty = false;
+        await this.backend.whenActive();
+        try {
+          await firstValueFrom(this.http.put(this.url, this.current));
+          localStorage.removeItem(LEGACY_SETTINGS_KEY);
+        } catch (e) {
+          if (this.backend.isConnectionFailure(e)) {
+            this.backend.connectionLost(e);
+            this.dirty = true;
+          } else {
+            console.warn('[Settings]: not saved', e);
+          }
+        }
+      }
+    } finally {
+      this.writing = false;
+    }
+  }
+}
+
+function legacySettings(): object {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LEGACY_SETTINGS_KEY) ?? '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch {
+    return {};
   }
 }

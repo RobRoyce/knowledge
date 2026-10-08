@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+import { BackendService } from '@services/ipc-services/backend.service';
 import { WindowControls } from '@app/platform/window-controls';
 import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
 import { ChildrenOutletContexts, NavigationEnd, Router } from '@angular/router';
@@ -143,6 +144,7 @@ export class AppComponent implements OnInit {
     private projects: ProjectService,
     private ipc: ElectronIpcService,
     public windowControls: WindowControls,
+    public backend: BackendService,
     private ingest: IngestService,
     private pCommand: ProjectCommandService,
     private router: Router,
