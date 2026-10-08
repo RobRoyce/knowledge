@@ -36,14 +36,11 @@
     "@fullcalendar/interaction": "^5.11.5",
     "@fullcalendar/list": "^5.11.5",
     "@fullcalendar/timegrid": "^5.11.5",
-    "chart.js": "^3.9.1",
-    "chokidar": "^3.5.3",
     "cytoscape": "^3.28.1",
     "cytoscape-cola": "^2.5.1",
     "cytoscape-dagre": "^2.5.0",
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-klay": "^3.1.4",
-    "eslint": "^8.38.0",
     "fuse.js": "^6.6.2",
     "marked": "^4.3.0",
     "primeflex": "^3.3.1",
@@ -51,7 +48,6 @@
     "primeng": "^14.2.3",
     "rxjs": "~7.5.7",
     "tslib": "^2.6.2",
-    "typescript": "<4.9.0",
     "zone.js": "^0.11.8"
   },
   "devDependencies": {
@@ -74,9 +70,7 @@
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-html": "^7.1.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "ng-packagr": "^14.2.2",
-    "typescript": "<4.9.0",
-    "web-worker": "^1.3.0"
+    "typescript": "<4.9.0"
   },
   "eslintConfig": {
     "extends": [

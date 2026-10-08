@@ -52,12 +52,10 @@ import {
 const DESKTOP = isDesktop();
 import { StorageService } from '@services/ipc-services/storage.service';
 import { A11yModule } from '@angular/cdk/a11y';
-import { AccordionModule } from 'primeng/accordion';
 import { AppComponent } from '@app/app.component';
 import { AppRoutingModule } from '@app/app-routing.module';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { BadgeModule } from 'primeng/badge';
-import { BlockUIModule } from 'primeng/blockui';
 import { BreadcrumbModule } from 'primeng/breadcrumb';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { BrowserModule } from '@angular/platform-browser';
@@ -66,7 +64,6 @@ import { ButtonModule } from 'primeng/button';
 import { CalendarComponent } from '@components/calendar.component';
 import { CalendarModule } from 'primeng/calendar';
 import { CardModule } from 'primeng/card';
-import { ChartModule } from 'primeng/chart';
 import { ChatApiComponent } from '@components/chat-components/api.component';
 import { ChatActionsComponent } from '@components/chat-components/chat.actions.component';
 import { ChatComponent } from '@components/chat.component';
@@ -78,7 +75,6 @@ import { ChipModule } from 'primeng/chip';
 import { ChipsModule } from 'primeng/chips';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
-import { ConfirmPopupModule } from 'primeng/confirmpopup';
 import {
   ConfirmationService,
   MessageService,
@@ -91,13 +87,11 @@ import {
   SessionDialogComponent,
   SessionStatusComponent,
 } from '@components/shared/session.component';
-import { DataViewModule } from 'primeng/dataview';
 import { DialogModule } from 'primeng/dialog';
 import { DialogService } from 'primeng/dynamicdialog';
 import { DisplaySettingsComponent } from '@components/settings/display-settings.component';
 import { DividerModule } from 'primeng/divider';
 import { DropdownModule } from 'primeng/dropdown';
-import { FileUploadModule } from 'primeng/fileupload';
 import { FileViewComponent } from '@components/source-components/ks-viewport/file-view.component';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { FullCalendarModule } from '@fullcalendar/angular';
@@ -132,16 +126,12 @@ import { KsTableComponent } from '@components/source-components/ks-table.compone
 import { KsThumbnailComponent } from '@components/source-components/ks-thumbnail.component';
 import { MarkdownPipe } from '@pipes/markdown.pipe';
 import { MenuModule } from 'primeng/menu';
-import { MenubarModule } from 'primeng/menubar';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { NgModule } from '@angular/core';
-import { OrganizationChartModule } from 'primeng/organizationchart';
 import { OverlayModule } from '@angular/cdk/overlay';
 import { OverlayPanelModule } from 'primeng/overlaypanel';
 import { PaginatorModule } from 'primeng/paginator';
 import { PanelModule } from 'primeng/panel';
-import { PickListModule } from 'primeng/picklist';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ProjectAsTreeNodePipe } from '@pipes/project-as-tree-node.pipe';
 import { ProjectBreadcrumbComponent } from '@components/project-components/project-breadcrumb.component';
 import { ProjectBreadcrumbPipe } from '@pipes/project-breadcrumb.pipe';
@@ -161,23 +151,17 @@ import { SelectButtonModule } from 'primeng/selectbutton';
 import { SettingTemplateComponent } from '@components/settings/setting-template.component';
 import { SettingsComponent } from '@components/settings/settings.component';
 import { SettingsService } from '@services/ipc-services/settings.service';
-import { SidebarModule } from 'primeng/sidebar';
 import { SkeletonModule } from 'primeng/skeleton';
 import { SliderModule } from 'primeng/slider';
 import { SpeedDialModule } from 'primeng/speeddial';
-import { SplitButtonModule } from 'primeng/splitbutton';
-import { SplitterModule } from 'primeng/splitter';
 import { StorageSettingsComponent } from '@components/settings/storage-settings.component';
 import { StyleClassModule } from 'primeng/styleclass';
 import { SwitchLabelPipe } from '@pipes/switch-label.pipe';
-import { TabViewModule } from 'primeng/tabview';
 import { TableComponent } from '@components/table.component';
 import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
 import { TimelineComponent } from '@components/shared/timeline.component';
 import { TimelineModule } from 'primeng/timeline';
 import { ToastModule } from 'primeng/toast';
-import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
 import { TreeModule } from 'primeng/tree';
 import { TreeSelectModule } from 'primeng/treeselect';
@@ -204,12 +188,12 @@ import { ProTipsComponent } from '@components/shared/pro-tips.component';
 import { ChatInputComponent } from '@components/chat-components/chat.input.component';
 import { WebImportComponent } from '@components/shared/web.import.component';
 import { MessageModule } from 'primeng/message';
+import { MessagesModule } from 'primeng/messages';
+import { ProgressBarModule } from 'primeng/progressbar';
 import { QuizMessage } from '@components/chat-components/message-templates/quiz.message';
 import { CategorizeMessage } from '@components/chat-components/message-templates/categorize.message';
-import { TreeTableModule } from 'primeng/treetable';
 import { TopicMessage } from '@components/chat-components/message-templates/topic.message';
 import { ChatMessageDirective } from './directives/chat-message.directive';
-import { CarouselModule } from 'primeng/carousel';
 
 @NgModule({
   declarations: [
@@ -296,31 +280,25 @@ import { CarouselModule } from 'primeng/carousel';
   ],
   imports: [
     A11yModule,
-    AccordionModule,
     AppRoutingModule,
     AutoCompleteModule,
     BadgeModule,
-    BlockUIModule,
     BreadcrumbModule,
     BrowserAnimationsModule,
     BrowserModule,
     ButtonModule,
     CalendarModule,
     CardModule,
-    ChartModule,
     CheckboxModule,
     ChipModule,
     ChipsModule,
     ClipboardModule,
     ConfirmDialogModule,
-    ConfirmPopupModule,
     ContextMenuModule,
-    DataViewModule,
     DialogModule,
     DividerModule,
     DragDropModule,
     DropdownModule,
-    FileUploadModule,
     FormsModule,
     FullCalendarModule,
     HttpClientModule,
@@ -329,41 +307,31 @@ import { CarouselModule } from 'primeng/carousel';
     InputTextModule,
     InputTextareaModule,
     MenuModule,
-    MenubarModule,
     MultiSelectModule,
-    OrganizationChartModule,
     OverlayModule,
     OverlayPanelModule,
     PaginatorModule,
     PanelModule,
-    PickListModule,
-    ProgressSpinnerModule,
     RadioButtonModule,
     ReactiveFormsModule,
     ScrollPanelModule,
     ScrollingModule,
     SelectButtonModule,
-    SidebarModule,
     SkeletonModule,
     SliderModule,
     SpeedDialModule,
-    SplitButtonModule,
-    SplitterModule,
     StyleClassModule,
-    TabViewModule,
     TableModule,
-    TagModule,
     TimelineModule,
     ToastModule,
-    ToggleButtonModule,
     TooltipModule,
     TreeModule,
     TreeSelectModule,
     YouTubePlayerModule,
     DragDropModule,
     MessageModule,
-    TreeTableModule,
-    CarouselModule,
+    MessagesModule,
+    ProgressBarModule,
   ],
   providers: [
     {
