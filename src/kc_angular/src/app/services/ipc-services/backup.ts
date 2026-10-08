@@ -15,18 +15,21 @@
  */
 
 /*
- * Backup and restore for renderer storage.
+ * Backup and restore for renderer storage (localStorage).
  *
- * A backup is a full snapshot of localStorage. It holds projects, their
- * sources and annotations, chat history, the inbox, topics and UI state.
- * It does not hold settings, imported files or the extracted-text cache.
+ * The renderer keeps chat history, the inbox, the current project, the
+ * favicon cache, and UI preferences. Projects, sources, and files are in
+ * the storage service and its library backup, not here.
+ *
+ * A renderer backup is a full snapshot. If old project keys exist, they
+ * are included, so the file can also be migration input
+ * (see docs/storage-service.md).
  *
  * This module has no Angular or Electron imports so that Node can test it.
  */
 
 export const BACKUP_FORMAT = 'knowledge-backup';
 export const BACKUP_VERSION = 1;
-export const PROJECT_LIST_KEY = 'kc-projects';
 
 /** The subset of the Web Storage API that backup and restore use. */
 export interface KeyValueStore {
@@ -46,8 +49,6 @@ export interface Backup {
 
 export interface RestoreResult {
   keysWritten: number;
-  projectsAdded: number;
-  projectsReplaced: number;
 }
 
 export function createBackup(
@@ -77,45 +78,19 @@ export function createBackup(
 }
 
 /**
- * Restore a backup into the store.
- *
- * Keys from the backup replace keys with the same name. The project list is
- * merged so that projects already in the store remain listed.
- * Throws an Error with a user-facing message if the input is not a backup.
+ * Restore a backup into the store. Keys from the backup replace keys with
+ * the same name. Throws an Error with a user-facing message if the input
+ * is not a backup.
  */
 export function restoreBackup(
   store: KeyValueStore,
   input: unknown
 ): RestoreResult {
   const data = toKeyValues(input);
-
-  const existingIds = readProjectIds(store.getItem(PROJECT_LIST_KEY));
-  const importedIds = readProjectIds(data[PROJECT_LIST_KEY] ?? null);
-
-  let keysWritten = 0;
   for (const [key, value] of Object.entries(data)) {
-    if (key === PROJECT_LIST_KEY) {
-      continue;
-    }
     store.setItem(key, value);
-    keysWritten++;
   }
-
-  const merged = [...existingIds];
-  let projectsAdded = 0;
-  let projectsReplaced = 0;
-  for (const id of importedIds) {
-    if (merged.includes(id)) {
-      projectsReplaced++;
-    } else {
-      merged.push(id);
-      projectsAdded++;
-    }
-  }
-  store.setItem(PROJECT_LIST_KEY, JSON.stringify(merged));
-  keysWritten++;
-
-  return { keysWritten, projectsAdded, projectsReplaced };
+  return { keysWritten: Object.keys(data).length };
 }
 
 /**
@@ -146,18 +121,4 @@ function toKeyValues(input: unknown): Record<string, string> {
   }
 
   throw new Error('The file is not a Knowledge backup.');
-}
-
-function readProjectIds(raw: string | null): string[] {
-  if (!raw) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((id) => typeof id === 'string')
-      : [];
-  } catch {
-    return [];
-  }
 }

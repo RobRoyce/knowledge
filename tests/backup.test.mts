@@ -7,7 +7,6 @@ import assert from "node:assert/strict";
 import {
   createBackup,
   restoreBackup,
-  PROJECT_LIST_KEY,
 } from "../src/kc_angular/src/app/services/ipc-services/backup.ts";
 import type { KeyValueStore } from "../src/kc_angular/src/app/services/ipc-services/backup.ts";
 
@@ -48,7 +47,7 @@ function populated() {
     meta: [{ key: "annotation", value: "mentions chlorophyll" }],
   };
   store.setItem("project-a", JSON.stringify(project("project-a", [source])));
-  store.setItem(PROJECT_LIST_KEY, JSON.stringify(["project-a"]));
+  store.setItem("kc-projects", JSON.stringify(["project-a"]));
   store.setItem("chat-source-1", JSON.stringify([{ text: "hello" }]));
   store.setItem("ingest-queue", JSON.stringify([{ title: "pending" }]));
   store.setItem("current-project", "project-a");
@@ -63,8 +62,7 @@ test("backup round trip restores every key into an empty profile", () => {
   const result = restoreBackup(fresh, backup);
 
   assert.deepEqual(fresh.snapshot(), original.snapshot());
-  assert.equal(result.projectsAdded, 1);
-  assert.equal(result.projectsReplaced, 0);
+  assert.equal(result.keysWritten, original.length);
 });
 
 test("backup keeps chat history, inbox and source annotations", () => {
@@ -78,22 +76,22 @@ test("backup keeps chat history, inbox and source annotations", () => {
   ]);
 });
 
-test("restore merges the project list and does not duplicate IDs", () => {
+test("restore replaces keys with the same name and keeps other keys", () => {
   const backup = createBackup(populated());
 
   const target = new MemoryStore();
-  target.setItem("project-b", JSON.stringify(project("project-b")));
-  target.setItem(PROJECT_LIST_KEY, JSON.stringify(["project-b", "project-a"]));
+  target.setItem("current-project", "old");
+  target.setItem("chat-other", "kept");
 
   const result = restoreBackup(target, backup);
 
-  assert.deepEqual(JSON.parse(target.getItem(PROJECT_LIST_KEY)!), [
-    "project-b",
-    "project-a",
-  ]);
-  assert.ok(target.getItem("project-b"));
-  assert.equal(result.projectsAdded, 0);
-  assert.equal(result.projectsReplaced, 1);
+  assert.equal(target.getItem("current-project"), "project-a");
+  assert.equal(target.getItem("chat-other"), "kept");
+  assert.equal(
+    target.getItem("chat-source-1"),
+    JSON.stringify([{ text: "hello" }])
+  );
+  assert.equal(result.keysWritten, Object.keys(backup.data).length);
 });
 
 test("restore rejects invalid files and leaves the store unchanged", () => {

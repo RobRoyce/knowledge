@@ -93,6 +93,9 @@ export class KnowledgeSource {
   importMethod?: ImportMethod = 'manual';
   thumbnail?: string;
 
+  /** Managed copy of a file source in the storage service. */
+  assetId?: string;
+
   constructor(
     title: string,
     id: UUID,

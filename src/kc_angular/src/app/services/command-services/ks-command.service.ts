@@ -122,7 +122,24 @@ export class KsCommandService {
   }
 
   open(ks: Partial<KnowledgeSource>) {
-    if (ks.ingestType === 'file' && typeof ks.accessLink === 'string') {
+    if (ks.ingestType === 'file' && ks.assetId) {
+      this.ipc
+        .openAsset(ks.assetId)
+        .then(() =>
+          this.notifications.success(
+            'Source Command',
+            'File Opened',
+            ks.title ?? ''
+          )
+        )
+        .catch((e) =>
+          this.notifications.error(
+            'Source Command',
+            'Unable to Open File',
+            `${e}`
+          )
+        );
+    } else if (ks.ingestType === 'file' && typeof ks.accessLink === 'string') {
       this.ipc.openLocalFile(ks.accessLink).then((result) => {
         if (result) {
           this.notifications.success(

@@ -55,30 +55,12 @@ export class DataService implements OnDestroy {
     },
 
     get: async (uuids: UUID[]): Promise<KnowledgeSource[]> => {
-      const ksList: KnowledgeSource[] = [];
-      for (const id of uuids) {
-        const lookup = `ks-${id.value}`;
-        const kstr = localStorage.getItem(lookup);
-        if (kstr) {
-          const ks = JSON.parse(kstr);
-          if (ks) {
-            ksList.push(ks);
-          }
-        }
-      }
-      return ksList;
+      const ids = new Set(uuids.map((id) => id.value));
+      return (await this.storage.ksList()).filter((ks) => ids.has(ks.id.value));
     },
 
+    /** Sources live inside their project. The storage service persists both. */
     update: async (ksList: KnowledgeSource[]) => {
-      for (const ks of ksList) {
-        const lookup = `ks-${ks.id.value}`;
-        const kstr = JSON.stringify(ks);
-        if (kstr) {
-          localStorage.setItem(lookup, kstr);
-        }
-      }
-
-      // TODO: Remove this after projects no longer carry entire KS objects...
       for (const ks of ksList) {
         await this._projects.updateProjects([
           {
@@ -86,13 +68,6 @@ export class DataService implements OnDestroy {
             updateKnowledgeSource: [ks],
           },
         ]);
-      }
-    },
-
-    delete: async (ksList: KnowledgeSource[]) => {
-      for (const ks of ksList) {
-        const lookup = `ks-${ks.id.value}`;
-        localStorage.removeItem(lookup);
       }
     },
 

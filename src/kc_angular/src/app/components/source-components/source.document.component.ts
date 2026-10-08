@@ -14,7 +14,16 @@
  *  limitations under the License.
  */
 
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { StorageService } from '@services/ipc-services/storage.service';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 
@@ -50,7 +59,7 @@ import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
     `,
   ],
 })
-export class SourceDocumentComponent implements OnInit {
+export class SourceDocumentComponent implements OnInit, OnDestroy {
   source!: KnowledgeSource;
 
   safeUrl: SafeUrl | undefined;
@@ -72,17 +81,43 @@ export class SourceDocumentComponent implements OnInit {
   @ViewChild('documentContainer', { static: true })
   documentContainer!: ElementRef<HTMLDivElement>;
 
-  constructor(private sanitizer: DomSanitizer) {}
+  private objectUrl?: string;
+
+  constructor(
+    private sanitizer: DomSanitizer,
+    private http: HttpClient,
+    private storage: StorageService
+  ) {}
+
+  ngOnDestroy() {
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl);
+    }
+  }
+
+  /** Managed files come from the storage service. Others use the file path. */
+  private async documentUrl(): Promise<string> {
+    if (this.source.assetId) {
+      const blob = await firstValueFrom(
+        this.http.get(this.storage.assetContentUrl(this.source.assetId), {
+          responseType: 'blob',
+        })
+      );
+      this.objectUrl = URL.createObjectURL(blob);
+      return this.objectUrl;
+    }
+    return 'file://' + encodeURI(this.source.accessLink as string);
+  }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      if (typeof this.source.accessLink === 'string') {
+    setTimeout(async () => {
+      if (typeof this.source.accessLink === 'string' || this.source.assetId) {
         this.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
-          'file://' + encodeURI(this.source.accessLink)
+          await this.documentUrl()
         );
 
         for (const type of this.styles.unset) {
-          if (this.source.accessLink?.endsWith(type)) {
+          if (String(this.source.accessLink ?? '').endsWith(type)) {
             this.style = {
               'max-height': '100%',
               'max-width': '100%',

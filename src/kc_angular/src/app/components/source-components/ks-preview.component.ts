@@ -191,7 +191,11 @@ export class KsPreviewComponent implements OnInit, OnDestroy {
     }
 
     if (clickEvent.openClicked) {
-      this.ipc.openLocalFile(this.fileViewConfig.filePath);
+      if (this.ks.assetId) {
+        this.ipc.openAsset(this.ks.assetId);
+      } else {
+        this.ipc.openLocalFile(this.fileViewConfig.filePath);
+      }
     }
   }
 

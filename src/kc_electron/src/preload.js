@@ -55,7 +55,11 @@ const ipcSendChannels = [
   "A2E:Window:ZoomIn",
 ];
 
-const ipcInvokeChannels = ["A2E:Backend:Info"];
+const ipcInvokeChannels = [
+  "A2E:Backend:Info",
+  "A2E:Storage:ImportFile",
+  "A2E:Storage:OpenAsset",
+];
 
 const ipcReceiveOnceChannels = [
   "E2A:BrowserView:Close",

@@ -9,7 +9,8 @@
   "type": "commonjs",
   "workspaces": [
     "src/kc_electron",
-    "src/kc_angular"
+    "src/kc_angular",
+    "src/kc_storage"
   ],
   "repository": {
     "type": "git",
@@ -38,6 +39,8 @@
     "start-debug": "electron . --inspect=5858",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/*.test.mts\"",
     "e2e": "node --test --test-concurrency=1 \"e2e/*.e2e.mjs\"",
+    "storage": "node src/kc_storage/src/main.ts",
+    "test-storage": "yarn workspace kc_storage test",
     "watch-main": "cd src/kc_angular && yarn run watch-main",
     "watch-main-dev": "cd src/kc_angular && yarn run watch-main-dev",
     "watch-electron": "cd src/kc_electron && yarn run watch-electron",

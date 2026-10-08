@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Rob Royce
+ * Copyright (c) 2023-2026 Rob Royce
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,11 +13,37 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+
+/*
+ * Projects and sources. The storage service owns them. This service keeps
+ * an in-memory copy for the UI and writes every change to the service in
+ * order. It does not use localStorage for projects or sources.
+ *
+ * localStorage keeps only UI state: the current project, chat history,
+ * favicon cache, the inbox, and preferences.
+ */
+
 import { Injectable } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { KcProject } from '@app/models/project.model';
 import { KnowledgeSource } from '@app/models/knowledge.source.model';
 import { AutoscanService } from '@services/ingest-services/autoscan.service';
 import { NotificationsService } from '@services/user-services/notifications.service';
+import { BackendService } from '@services/ipc-services/backend.service';
+import { ElectronIpcService } from '@services/ipc-services/electron-ipc.service';
+import {
+  projectToRecord,
+  recordToProject,
+  recordToSource,
+  sourceToRecord,
+} from '@contracts/mapping';
+import type {
+  ProjectList,
+  ProjectRecord,
+  SourceList,
+  SourceRecord,
+} from '@contracts/storage';
 import { createBackup, restoreBackup, RestoreResult } from './backup';
 
 @Injectable({
@@ -25,123 +51,75 @@ import { createBackup, restoreBackup, RestoreResult } from './backup';
 })
 export class StorageService {
   readonly KC_CURRENT_PROJECT = 'current-project';
-  private KC_ALL_PROJECT_IDS = 'kc-projects';
   private db = window.localStorage;
-  private projectList: KcProject[] | null = null;
+  private projectList: KcProject[] = [];
+
+  /** JSON of the last record written to or read from the service, by ID. */
+  private synced = new Map<string, string>();
+
+  /** Writes run one at a time, in call order. */
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(
+    private http: HttpClient,
+    private backend: BackendService,
+    private ipc: ElectronIpcService,
     private autoscan: AutoscanService,
     private notifications: NotificationsService
   ) {}
 
-  get projects(): KcProject[] {
-    const projects: KcProject[] = [];
-
-    // Get and parse Project list from local storage
-    const projectsStr: string | null = this.db.getItem(this.KC_ALL_PROJECT_IDS);
-    if (!projectsStr) {
-      this.notifications.warn(
-        'Storage Service',
-        'Project List Unavailable',
-        'Project list does not exist in storage system, creating...'
+  private get api() {
+    const url = this.backend.storage.url;
+    if (!url) {
+      throw new Error(
+        this.backend.storage.error ?? 'Storage service unavailable.'
       );
-      this.db.setItem(this.KC_ALL_PROJECT_IDS, JSON.stringify([]));
-      return projects;
     }
-
-    const projectIds: string[] = JSON.parse(projectsStr);
-    if (!projectIds) {
-      this.notifications.warn(
-        'Storage Service',
-        'Invalid Project List',
-        'Could not deserialize Project list JSON template... '
-      );
-      return projects;
-    }
-
-    if (projectIds.length === 0) {
-      this.notifications.warn('Storage Service', 'No Projects Available', '');
-      return projects;
-    }
-
-    let pStr: string | null = null;
-    let project: KcProject | null = null;
-
-    // Deserialize projects from list of Project IDs
-    for (const pId of projectIds) {
-      pStr = this.db.getItem(pId);
-      if (!pStr) {
-        this.notifications.warn('Storage Service', 'Invalid Project Id', pId);
-        pStr = null;
-        continue;
-      }
-
-      project = JSON.parse(pStr);
-      if (!project) {
-        this.notifications.warn(
-          'Storage Service',
-          'Invalid Project Object',
-          'Could not deserialize Project JSON template...'
-        );
-        project = null;
-        continue;
-      }
-
-      // TODO: a fix for refactoring project source list and calendar
-
-      // Pre-populate list of Knowledge Sources for later consumption
-      if (project.knowledgeSource && project.knowledgeSource.length > 0) {
-        for (const ks of project.knowledgeSource) {
-          // TODO : this is a temporary fix after refactoring ks timelines, should be removed eventually...
-          if (!ks.dateAccessed) {
-            ks.dateAccessed = [];
-          }
-          if (!ks.dateModified) {
-            ks.dateModified = [];
-          }
-          if (!ks.dateCreated) {
-            ks.dateCreated = new Date();
-          }
-
-          ks.dateCreated = new Date(ks.dateCreated);
-
-          const accessed = [];
-          for (const d of ks.dateAccessed) {
-            accessed.push(new Date(d));
-          }
-          ks.dateAccessed = accessed;
-
-          const modified = [];
-          for (const d of ks.dateModified) {
-            modified.push(new Date(d));
-          }
-          ks.dateModified = modified;
-          ks.dateDue = ks.dateDue ? new Date(ks.dateDue) : ks.dateDue;
-          ks.associatedProject = project.id;
-          ks.icon = undefined;
-        }
-      }
-      projects.push(project);
-    }
-
-    if (projects.length > 0) {
-      this.projectList = projects;
-    } else {
-      this.projectList = null;
-    }
-
-    return projects;
+    return `${url}/v1`;
   }
 
-  set projects(projectModels: KcProject[]) {
-    let pStr: string;
-    const pids = [];
-    for (const project of projectModels) {
-      pStr = JSON.stringify(project);
-      this.db.setItem(project.id.value, pStr);
-      pids.push(project.id.value);
+  /** Load all projects and sources. Runs once before the app starts. */
+  async load() {
+    const [{ projects }, { sources }] = await Promise.all([
+      firstValueFrom(this.http.get<ProjectList>(`${this.api}/projects`)),
+      firstValueFrom(this.http.get<SourceList>(`${this.api}/sources`)),
+    ]);
+
+    const byProject = new Map<string, KnowledgeSource[]>();
+    for (const record of sources) {
+      this.synced.set(`s:${record.id}`, JSON.stringify(this.writable(record)));
+      const ks = this.revive(recordToSource(record) as KnowledgeSource);
+      const list = byProject.get(record.projectId) ?? [];
+      list.push(ks);
+      byProject.set(record.projectId, list);
     }
-    this.db.setItem(this.KC_ALL_PROJECT_IDS, JSON.stringify(pids));
+
+    this.projectList = projects.map((record) => {
+      this.synced.set(`p:${record.id}`, JSON.stringify(this.writable(record)));
+      return recordToProject(
+        record,
+        byProject.get(record.id) ?? []
+      ) as KcProject;
+    });
+  }
+
+  /** Dates arrive as strings. The UI expects Date objects. */
+  private revive(ks: KnowledgeSource): KnowledgeSource {
+    ks.dateCreated = new Date(ks.dateCreated ?? Date.now());
+    ks.dateAccessed = (ks.dateAccessed ?? []).map((d) => new Date(d));
+    ks.dateModified = (ks.dateModified ?? []).map((d) => new Date(d));
+    ks.dateDue = ks.dateDue ? new Date(ks.dateDue) : ks.dateDue;
+    return ks;
+  }
+
+  /** The fields a client sends. The service sets position and times. */
+  private writable(r: Partial<ProjectRecord & SourceRecord>) {
+    const { position, createdAt, updatedAt, ...rest } = r;
+    return JSON.parse(JSON.stringify(rest));
+  }
+
+  get projects(): KcProject[] {
+    return this.projectList;
   }
 
   get kcCurrentProject(): string | null {
@@ -149,98 +127,22 @@ export class StorageService {
   }
 
   set kcCurrentProject(id: string | null) {
-    if (id === null) {
-      this.db.setItem(this.KC_CURRENT_PROJECT, '');
-      return;
-    }
-    this.db.setItem(this.KC_CURRENT_PROJECT, id);
+    this.db.setItem(this.KC_CURRENT_PROJECT, id ?? '');
   }
 
-  /**
-   * Returns a list of all Knowledge Sources stored in the application
-   */
   async ksList() {
-    const projectIdsStr: string | null = this.db.getItem(
-      this.KC_ALL_PROJECT_IDS
-    );
-
-    if (projectIdsStr === null) {
-      this.notifications.warn(
-        'Storage Service',
-        'Project List Unavailable',
-        'Project list does not exist in storage system when retrieving source list...'
-      );
-      return [];
-    }
-
-    const projectIds = JSON.parse(projectIdsStr);
-    if (!projectIds) {
-      this.notifications.warn(
-        'Storage Service',
-        'Invalid Project List',
-        'Could not deserialize Project list JSON template when retrieving source list...'
-      );
-      return [];
-    }
-
-    const ksList: KnowledgeSource[] = [];
-    for (const projectId of projectIds) {
-      const projectStr = this.db.getItem(projectId);
-      if (!projectStr) break;
-      const project: KcProject = JSON.parse(projectStr);
-      if (project.knowledgeSource)
-        for (const ks of project.knowledgeSource) ksList.push(ks);
-    }
-
-    return ksList;
+    return this.projectList.flatMap((p) => p.knowledgeSource ?? []);
   }
 
   async getProjects() {
-    if (this.projectList) return this.projectList;
-    return this.projects;
+    return this.projectList;
   }
 
   async saveProject(project: KcProject) {
-    // Update project in local cache
-    const idx = this.projectList?.findIndex(
-      (p) => p.id.value === project.id.value
-    );
-
-    if (idx === -1) {
-      // If project does not exist in memory, add it
-      if (this.projectList) this.projectList.push(project);
-      else this.projectList = [project];
-    } else {
-      // Otherwise update the project in-place
-      if (this.projectList && idx && idx) {
-        this.projectList[idx] = project;
-      }
+    if (!this.projectList.find((p) => p.id.value === project.id.value)) {
+      this.projectList.push(project);
     }
-
-    // Update the project in database
-    await this.updateProject(project);
-
-    // Get list of all project IDs from local storage
-    let projectList: string[] = [];
-    let projectListString = this.db.getItem(this.KC_ALL_PROJECT_IDS);
-    if (projectListString) {
-      projectList = JSON.parse(projectListString);
-    }
-
-    if (projectList.length > 0) {
-      const id = projectList.find((item) => item === project.id.value);
-      // Check if project ID is in the list. If it's not, add it, otherwise continue
-      if (!id) {
-        projectList.push(project.id.value);
-        projectListString = JSON.stringify(projectList);
-        this.db.setItem(this.KC_ALL_PROJECT_IDS, projectListString);
-      }
-    } else {
-      // If there is no project list, create one and add project to it
-      projectList.push(project.id.value);
-      projectListString = JSON.stringify(projectList);
-      this.db.setItem(this.KC_ALL_PROJECT_IDS, projectListString);
-    }
+    return this.enqueue(() => this.write(project));
   }
 
   async saveProjectList(projects: KcProject[]) {
@@ -250,62 +152,149 @@ export class StorageService {
   }
 
   async updateProject(project: KcProject) {
-    const projectString = JSON.stringify(project);
-    this.db.setItem(project.id.value, projectString);
+    return this.enqueue(() => this.write(project));
   }
 
   deleteProject(id: string) {
-    if (!this.projectList) {
-      this.notifications.warn(
-        'Storage Service',
-        'Invalid Project',
-        'Attempting to delete a project that does not exist in memory...'
+    this.projectList = this.projectList.filter((p) => p.id.value !== id);
+    this.db.removeItem(`chat-${id}`);
+    this.enqueue(() => this.remove(`p:${id}`, `${this.api}/projects/${id}`));
+  }
+
+  deleteKnowledgeSource(ks: KnowledgeSource) {
+    this.db.removeItem(`icon-${ks.id.value}`);
+    this.db.removeItem(`chat-${ks.id.value}`);
+    this.enqueue(() =>
+      this.remove(`s:${ks.id.value}`, `${this.api}/sources/${ks.id.value}`)
+    );
+
+    if (ks.importMethod === 'autoscan' && typeof ks.accessLink === 'string') {
+      this.autoscan.delete(ks.accessLink);
+    }
+  }
+
+  private enqueue(task: () => Promise<void>): Promise<void> {
+    this.queue = this.queue.then(task).catch((e) => this.report(e));
+    return this.queue;
+  }
+
+  private report(e: unknown) {
+    const message =
+      e instanceof HttpErrorResponse
+        ? e.error?.error?.message ?? e.message
+        : e instanceof Error
+        ? e.message
+        : String(e);
+    console.error('[Storage]:', e);
+    this.notifications.error('Storage', 'Changes Not Saved', message, 'toast');
+  }
+
+  /** Write the project and every changed source. Copy new files first. */
+  private async write(project: KcProject) {
+    const projectRecord = projectToRecord(project);
+    await this.put(
+      `p:${projectRecord.id}`,
+      `${this.api}/projects/${projectRecord.id}`,
+      projectRecord
+    );
+
+    for (const ks of project.knowledgeSource ?? []) {
+      if (ks.ingestType === 'file' && !ks.assetId) {
+        await this.copyFile(ks);
+      }
+      const record = sourceToRecord(ks, projectRecord.id);
+      await this.put(
+        `s:${record.id}`,
+        `${this.api}/sources/${record.id}`,
+        record
       );
+    }
+  }
+
+  private async copyFile(ks: KnowledgeSource) {
+    const file = ks.reference?.source?.file;
+    const path =
+      file?.path ?? (typeof ks.accessLink === 'string' ? ks.accessLink : '');
+    try {
+      const asset = await this.ipc.importFile(path, file?.type || undefined);
+      ks.assetId = asset.id;
+    } catch (e) {
+      // The source is saved without a managed copy. Report it.
+      this.notifications.error(
+        'Storage',
+        'File Not Copied',
+        `${ks.title}: ${e instanceof Error ? e.message : e}`,
+        'toast'
+      );
+    }
+  }
+
+  private async put(key: string, url: string, record: object) {
+    const json = JSON.stringify(this.writable(record));
+    if (this.synced.get(key) === json) {
       return;
     }
+    await firstValueFrom(this.http.put(url, JSON.parse(json)));
+    this.synced.set(key, json);
+  }
 
-    // Remove project from list
-    this.projectList = this.projectList.filter((p) => p.id.value !== id);
-
-    // Remove project saved under this string.
-    this.db.removeItem(id);
-    this.db.removeItem(`chat-${id}`);
-
-    // Persist changes
-    const projectIds: string[] = [];
-    for (const project of this.projectList) {
-      projectIds.push(project.id.value);
+  private async remove(key: string, url: string) {
+    try {
+      await firstValueFrom(this.http.delete(url));
+    } catch (e) {
+      if (!(e instanceof HttpErrorResponse && e.status === 404)) {
+        throw e;
+      }
     }
-    const projectListStr = JSON.stringify(projectIds);
-    this.db.setItem(this.KC_ALL_PROJECT_IDS, projectListStr);
+    this.synced.delete(key);
+  }
+
+  /** URL of a managed file's content. Fetch it with HttpClient (adds the token). */
+  assetContentUrl(assetId: string) {
+    return `${this.api}/assets/${assetId}/content`;
+  }
+
+  /** Download the library backup (projects, sources, managed files). */
+  async exportLibrary() {
+    const blob = await firstValueFrom(
+      this.http.get(`${this.api}/backup`, { responseType: 'blob' })
+    );
+    const date = new Date().toISOString().slice(0, 10);
+    this.download(blob, `knowledge-library-${date}.tar`);
+    return blob.size;
   }
 
   /**
-   * Download a backup of all renderer storage as a JSON file.
+   * Download a backup of renderer storage: chat history and preferences.
+   * Projects and sources are not in it. They are in the library backup.
    */
   export(appVersion?: string) {
     const backup = createBackup(this.db, appVersion);
     const date = backup.exportedAt.slice(0, 10);
-    const blob = new Blob([JSON.stringify(backup)], {
-      type: 'application/json;charset=utf-8;',
-    });
+    this.download(
+      new Blob([JSON.stringify(backup)], {
+        type: 'application/json;charset=utf-8;',
+      }),
+      `knowledge-backup-${date}.json`
+    );
+    return Object.keys(backup.data).length;
+  }
 
+  private download(blob: Blob, filename: string) {
     const link = document.createElement('a');
     link.style.display = 'none';
     link.href = URL.createObjectURL(blob);
-    link.download = `knowledge-backup-${date}.json`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     // Chromium reads the blob after click() returns
     setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-
-    return Object.keys(backup.data).length;
   }
 
   /**
-   * Restore a backup file. The caller must reload the app afterwards.
+   * Restore a renderer backup. The caller must reload the app afterwards.
    * Throws an Error with a user-facing message if the file is invalid.
    */
   restore(fileText: string): RestoreResult {
@@ -315,22 +304,6 @@ export class StorageService {
     } catch {
       throw new Error('The file is not valid JSON.');
     }
-    const result = restoreBackup(this.db, parsed);
-    this.projectList = null;
-    return result;
-  }
-
-  deleteKnowledgeSource(ks: KnowledgeSource) {
-    this.db.removeItem(`icon-${ks.id.value}`);
-    this.db.removeItem(`chat-${ks.id.value}`);
-
-    if (!ks.importMethod) {
-      return;
-    } else {
-      // TODO: autoscan service is only used in this one place here.. should consider moving elsewhere...
-      if (ks.importMethod === 'autoscan' && typeof ks.accessLink === 'string') {
-        this.autoscan.delete(ks.accessLink);
-      }
-    }
+    return restoreBackup(this.db, parsed);
   }
 }

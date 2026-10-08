@@ -41,6 +41,8 @@ import * as uuid from "uuid";
 import KnowledgeIpc from "./local/utils/ipc.utils";
 import ChatServer from "./local/chat.api";
 import { newToken, registerBackendInfo } from "./app/backend";
+import { startStorageService, stopStorageService } from "./app/storage.process";
+import { configureStorageClient } from "./app/storage.client";
 
 const settingsService = require("./app/services/settings.service");
 
@@ -83,11 +85,16 @@ if (!app.requestSingleInstanceLock()) {
   console.error(
     "[Knowledge]: this profile is already open in another instance. Exiting."
   );
-  app.exit(0);
+  process.exit(0);
 }
 
+const dataPath = settingsService.getSettings().system.appPath;
+// <data>/storage belongs to the chat server text cache
+const storage = startStorageService(path.join(dataPath, "library"));
+configureStorageClient(storage, path.join(dataPath, "tmp", "assets"));
+
 const chatServer = new ChatServer(newToken());
-registerBackendInfo({ chat: chatServer.start() });
+registerBackendInfo({ chat: chatServer.start(), storage });
 
 // Setup knowledge source ingestion
 require("./app/services/index");
@@ -238,8 +245,23 @@ function checkForUpdates() {
     });
 }
 
-app.on("ready", function () {
+app.on("ready", async function () {
+  // Projects and sources live in the storage service. Without it the app cannot work.
+  const endpoint = await storage;
+  if (endpoint.error) {
+    dialog.showErrorBox(
+      "Knowledge cannot start",
+      `The storage service did not start.\n\n${endpoint.error}`
+    );
+    app.exit(1);
+    return;
+  }
+
   createMainWindow();
   kcMainWindow.loadFile(MAIN_ENTRY);
   checkForUpdates();
+});
+
+app.on("will-quit", () => {
+  stopStorageService();
 });

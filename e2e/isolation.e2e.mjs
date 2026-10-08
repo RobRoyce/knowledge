@@ -71,6 +71,32 @@ test(
         401
       );
 
+      // Storage services: one per profile, each with its own token
+      assert.match(infoA.storage.url, /^http:\/\/127\.0\.0\.1:\d+$/);
+      assert.notEqual(infoA.storage.url, infoB.storage.url);
+      assert.notEqual(infoA.storage.token, infoB.storage.token);
+      const projects = (page, url, token) =>
+        page.evaluate(
+          async ({ url, token }) => {
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+            return (await fetch(`${url}/v1/projects`, { headers })).status;
+          },
+          { url, token }
+        );
+      assert.equal(
+        await projects(a.page, infoA.storage.url, infoA.storage.token),
+        200
+      );
+      assert.equal(
+        await projects(b.page, infoB.storage.url, infoB.storage.token),
+        200
+      );
+      assert.equal(await projects(b.page, infoA.storage.url), 401);
+      assert.equal(
+        await projects(b.page, infoA.storage.url, infoB.storage.token),
+        401
+      );
+
       // A second launch of profile A exits and leaves the first instance running
       const second = spawnSync(ELECTRON, [REPO], {
         cwd: REPO,
